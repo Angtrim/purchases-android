@@ -27,6 +27,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 import android.content.pm.PackageManager.PERMISSION_GRANTED
+import com.revenuecat.purchases.interfaces.ReceivePurchaserInfoListener
 
 /**
  * Entry point for Purchases. It should be instantiated as soon as your app has a unique user id
@@ -174,7 +175,9 @@ class Purchases @JvmOverloads internal constructor(
      * initialized Purchases without an appUserID, any other anonymous users using the same
      * purchases will be merged.
      */
-    fun restorePurchasesForPlayStoreAccount() {
+    fun restorePurchases(
+        completion: ReceivePurchaserInfoListener
+    ) {
         billingWrapper.queryPurchaseHistoryAsync(
             BillingClient.SkuType.SUBS,
             object : BillingWrapper.PurchaseHistoryResponseListener {
@@ -188,15 +191,25 @@ class Purchases @JvmOverloads internal constructor(
                                 if (allPurchases.isEmpty()) {
                                     if (cachesLastChecked != null && Date().time - cachesLastChecked!!.time < 60000) {
                                         emitCachePurchaserInfo {
-                                            listener?.onRestoreTransactions(it)
+                                            completion.onReceived(it, null)
                                         }
                                     } else {
                                         cachesLastChecked = Date()
-
-                                        getSubscriberInfo { listener?.onRestoreTransactions(it) }
+                                        getSubscriberInfo {
+                                            completion.onReceived(it, null)
+                                        }
                                     }
                                 } else {
-                                    postPurchases(allPurchases, true, false)
+                                    postPurchases(
+                                        allPurchases,
+                                        true,
+                                        { _, info ->
+                                            completion.onReceived(info, null)
+                                        },
+                                        { error ->
+                                            completion.onReceived(null, error)
+                                        }
+                                    )
                                 }
                             }
 
@@ -204,20 +217,26 @@ class Purchases @JvmOverloads internal constructor(
                                 responseCode: Int,
                                 message: String
                             ) {
-                                listener?.onRestoreTransactionsFailed(
-                                    ErrorDomains.PLAY_BILLING,
-                                    responseCode,
-                                    message
+                                completion.onReceived(
+                                    null,
+                                    PurchasesError(
+                                        ErrorDomains.PLAY_BILLING,
+                                        responseCode,
+                                        message
+                                    )
                                 )
                             }
                         })
                 }
 
                 override fun onReceivePurchaseHistoryError(responseCode: Int, message: String) {
-                    listener?.onRestoreTransactionsFailed(
-                        ErrorDomains.PLAY_BILLING,
-                        responseCode,
-                        message
+                    completion.onReceived(
+                        null,
+                        PurchasesError(
+                            ErrorDomains.PLAY_BILLING,
+                            responseCode,
+                            message
+                        )
                     )
                 }
             })
@@ -280,7 +299,7 @@ class Purchases @JvmOverloads internal constructor(
         listener = null
     }
 
-    // region Private Methods
+// region Private Methods
 
     private fun emitCachePurchaserInfo(f: (PurchaserInfo) -> Unit) {
         deviceCache.getCachedPurchaserInfo(appUserID)?.let { f(it) }
@@ -307,11 +326,14 @@ class Purchases @JvmOverloads internal constructor(
         @BillingClient.SkuType skuType: String,
         handler: GetSkusResponseHandler
     ) {
-        billingWrapper.querySkuDetailsAsync(skuType, skus, object : BillingWrapper.SkuDetailsResponseListener {
-            override fun onReceiveSkuDetails(skuDetails: List<SkuDetails>) {
-                handler.onReceiveSkus(skuDetails)
-            }
-        })
+        billingWrapper.querySkuDetailsAsync(
+            skuType,
+            skus,
+            object : BillingWrapper.SkuDetailsResponseListener {
+                override fun onReceiveSkuDetails(skuDetails: List<SkuDetails>) {
+                    handler.onReceiveSkus(skuDetails)
+                }
+            })
     }
 
     private fun getCaches() {
@@ -325,74 +347,61 @@ class Purchases @JvmOverloads internal constructor(
             getEntitlements(object : GetEntitlementsHandler {
                 override fun onReceiveEntitlements(entitlementMap: Map<String, Entitlement>) {}
 
-                override fun onReceiveEntitlementsError(domain: ErrorDomains, code: Int, message: String) {}
+                override fun onReceiveEntitlementsError(
+                    domain: ErrorDomains,
+                    code: Int,
+                    message: String
+                ) {
+                }
             })
         }
     }
 
     private fun getSubscriberInfo(onReceived: (PurchaserInfo) -> Unit) {
-        backend.getSubscriberInfo(appUserID, object : Backend.BackendResponseHandler() {
-            override fun onReceivePurchaserInfo(info: PurchaserInfo) {
+        backend.getSubscriberInfo(
+            appUserID,
+            { info ->
                 deviceCache.cachePurchaserInfo(appUserID, info)
                 onReceived(info)
-            }
-
-            override fun onError(code: Int, message: String?) {
+            },
+            { _, message ->
                 Log.e("Purchases", "Error fetching subscriber data: $message")
                 cachesLastChecked = null
-            }
-        })
+            })
     }
 
     private fun postPurchases(
         purchases: List<Purchase>,
-        isRestore: Boolean,
-        isPurchase: Boolean
+        allowSharingPlayStoreAccount: Boolean,
+        completion: (Purchase, PurchaserInfo) -> Unit,
+        onError: (PurchasesError) -> Unit
     ) {
-        for (p in purchases) {
-            val token = p.purchaseToken
-            val sku = p.sku
-
-            if (postedTokens.contains(token)) continue
-            postedTokens.add(token)
-            backend.postReceiptData(
-                token,
-                appUserID,
-                sku,
-                isRestore,
-                object : Backend.BackendResponseHandler() {
-                    override fun onReceivePurchaserInfo(info: PurchaserInfo) {
-                        billingWrapper.consumePurchase(token)
-
+        purchases.filter { !postedTokens.contains(it.purchaseToken) }
+            .forEach {
+                postedTokens.add(it.purchaseToken)
+                backend.postReceiptData(
+                    it.purchaseToken,
+                    appUserID,
+                    it.sku,
+                    allowSharingPlayStoreAccount,
+                    { info ->
+                        billingWrapper.consumePurchase(it.purchaseToken)
                         deviceCache.cachePurchaserInfo(appUserID, info)
-                        when {
-                            isPurchase -> listener?.onCompletedPurchase(sku, info)
-                            isRestore -> listener?.onRestoreTransactions(info)
-                            else -> listener?.onReceiveUpdatedPurchaserInfo(info)
-                        }
-                    }
-
-                    override fun onError(code: Int, message: String?) {
+                        completion(it, info)
+                    }, { code, message ->
                         if (code < 500) {
-                            billingWrapper.consumePurchase(token)
-                            postedTokens.remove(token)
+                            billingWrapper.consumePurchase(it.purchaseToken)
+                            postedTokens.remove(it.purchaseToken)
                         }
-
-                        when {
-                            isPurchase -> listener?.onFailedPurchase(
+                        onError(
+                            PurchasesError(
                                 ErrorDomains.REVENUECAT_BACKEND,
                                 code,
                                 message
                             )
-                            isRestore -> listener?.onRestoreTransactionsFailed(
-                                ErrorDomains.REVENUECAT_BACKEND,
-                                code,
-                                message
-                            )
-                        }
-                    }
-                })
-        }
+                        )
+                    })
+            }
     }
 
     private fun getAnonymousID(): String {
@@ -409,7 +418,10 @@ class Purchases @JvmOverloads internal constructor(
         deviceCache.clearCachedAppUserID()
     }
 
-    private fun getSkuDetails(entitlements: Map<String, Entitlement>, onCompleted: (HashMap<String, SkuDetails>) -> Unit) {
+    private fun getSkuDetails(
+        entitlements: Map<String, Entitlement>,
+        onCompleted: (HashMap<String, SkuDetails>) -> Unit
+    ) {
         val skus =
             entitlements.values.flatMap { it.offerings.values }.map { it.activeProductIdentifier }
 
@@ -463,13 +475,22 @@ class Purchases @JvmOverloads internal constructor(
         }
     }
 
-    // endregion
-    // region Overriden methods
+// endregion
+// region Overriden methods
     /**
      * @suppress
      */
     override fun onPurchasesUpdated(purchases: List<@JvmSuppressWildcards Purchase>) {
-        postPurchases(purchases, allowSharingPlayStoreAccount, true)
+        postPurchases(
+            purchases,
+            allowSharingPlayStoreAccount,
+            { purchase, info ->
+                listener?.onCompletedPurchase(purchase.sku, info)
+            },
+            { error ->
+                listener?.onFailedPurchase(error.domain, error.code, error.message)
+            }
+        )
     }
 
     /**
@@ -528,8 +549,8 @@ class Purchases @JvmOverloads internal constructor(
     override fun onActivityDestroyed(activity: Activity) {
 
     }
-    // endregion
-    // region Builder
+// endregion
+// region Builder
 
     /**
      * Used to construct a Purchases object
@@ -618,8 +639,9 @@ class Purchases @JvmOverloads internal constructor(
         }
 
     }
+
     // endregion
-    // region Static
+// region Static
     companion object {
         /**
          * Singleton instance of Purchases
@@ -643,8 +665,8 @@ class Purchases @JvmOverloads internal constructor(
      */
     enum class ErrorDomains {
         /**
-        * The error is related to the RevenueCat backend
-        */
+         * The error is related to the RevenueCat backend
+         */
         REVENUECAT_BACKEND,
         /**
          * The error is related to Play Billing
@@ -656,7 +678,7 @@ class Purchases @JvmOverloads internal constructor(
      * Different compatible attribution networks available
      * @param serverValue Id of this attribution network in the RevenueCat server
      */
-    enum class AttributionNetwork(val serverValue: Int)  {
+    enum class AttributionNetwork(val serverValue: Int) {
         /**
          * [https://www.adjust.com/]
          */
@@ -670,8 +692,8 @@ class Purchases @JvmOverloads internal constructor(
          */
         BRANCH(3)
     }
-    // endregion
-    // region Interfaces
+// endregion
+// region Interfaces
     /**
      * Used to handle async updates from Purchases
      */
@@ -697,19 +719,6 @@ class Purchases @JvmOverloads internal constructor(
          */
         fun onReceiveUpdatedPurchaserInfo(purchaserInfo: PurchaserInfo)
 
-        /**
-         * Called after successfully restoring purchases after restorePurchasesForPlayStoreAccount
-         * @param purchaserInfo Updated purchaser info after a successful restore
-         */
-        fun onRestoreTransactions(purchaserInfo: PurchaserInfo)
-
-        /**
-         * Called when restoring transactions fails after restorePurchasesForPlayStoreAccount
-         * @param domain Can be REVENUECAT_BACKEND or PLAY_BILLING
-         * @param code The error code
-         * @param reason Message of the error
-         */
-        fun onRestoreTransactionsFailed(domain: ErrorDomains, code: Int, reason: String?)
     }
 
     /**
@@ -761,3 +770,9 @@ class Purchases @JvmOverloads internal constructor(
     }
 
 }
+
+class PurchasesError(
+    val domain: Purchases.ErrorDomains,
+    val code: Int,
+    val message: String?
+)

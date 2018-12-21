@@ -2,6 +2,7 @@ package com.revenuecat.purchases_sample;
 
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -17,6 +18,8 @@ import com.revenuecat.purchases.Entitlement;
 import com.revenuecat.purchases.Offering;
 import com.revenuecat.purchases.PurchaserInfo;
 import com.revenuecat.purchases.Purchases;
+import com.revenuecat.purchases.PurchasesError;
+import com.revenuecat.purchases.interfaces.ReceivePurchaserInfoListener;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -81,7 +84,23 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
         restoreButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                purchases.restorePurchasesForPlayStoreAccount();
+                purchases.restorePurchases(new ReceivePurchaserInfoListener() {
+                    @Override
+                    public void onReceived(@Nullable final PurchaserInfo purchaserInfo, @Nullable PurchasesError error) {
+                        if (error == null) {
+                            Log.i("Purchases", "Got new purchaser info: " + purchaserInfo.getActiveSubscriptions());
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    mRecyclerView.setAdapter(new ExpirationsAdapter(purchaserInfo.getActiveEntitlements(), purchaserInfo.getAllExpirationDatesByEntitlement()));
+                                    mRecyclerView.invalidate();
+                                }
+                            });
+                        } else {
+                            Log.i("Purchases", error.getMessage());
+                        }
+                    }
+                });
             }
         });
 
@@ -153,23 +172,6 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
                 mRecyclerView.invalidate();
             }
         });
-    }
-
-    @Override
-    public void onRestoreTransactions(final PurchaserInfo purchaserInfo) {
-        Log.i("Purchases", "Got new purchaser info: " + purchaserInfo.getActiveSubscriptions());
-        this.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                mRecyclerView.setAdapter(new ExpirationsAdapter(purchaserInfo.getActiveEntitlements(), purchaserInfo.getAllExpirationDatesByEntitlement()));
-                mRecyclerView.invalidate();
-            }
-        });
-    }
-
-    @Override
-    public void onRestoreTransactionsFailed(Purchases.ErrorDomains domain, int code, String reason) {
-        Log.i("Purchases", reason);
     }
 
     @Override

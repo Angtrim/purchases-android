@@ -32,32 +32,32 @@ internal class Backend(
         abstract fun onError(code: Int, message: String)
     }
 
-    private abstract inner class PurchaserInfoReceivingCall internal constructor(private val handler: BackendResponseHandler) :
-        Dispatcher.AsyncCall() {
+    private abstract inner class PurchaserInfoReceivingCall internal constructor(
+        private val onSuccessHandler: (PurchaserInfo) -> Unit,
+        private val onErrorHandler: (Int, String?) -> Unit
+    ) : Dispatcher.AsyncCall() {
 
-        public override fun onCompletion(result: HTTPClient.Result) {
+        override fun onCompletion(result: HTTPClient.Result) {
             if (result.responseCode < 300) {
                 try {
-                    handler.onReceivePurchaserInfo(purchaserInfoFactory.build(result.body!!))
+                    onSuccessHandler(purchaserInfoFactory.build(result.body!!))
                 } catch (e: JSONException) {
-                    handler.onError(result.responseCode, e.message)
+                    onErrorHandler(result.responseCode, e.message)
                 }
-
             } else {
-                var errorMessage: String? = null
-                try {
-                    val message = result.body!!.getString("message")
-                    errorMessage = "Server error: $message"
-                } catch (jsonException: JSONException) {
-                    errorMessage = "Unexpected server error " + result.responseCode
-                }
-
-                handler.onError(result.responseCode, errorMessage)
+                onErrorHandler(
+                    result.responseCode,
+                    try {
+                        "Server error: ${result.body!!.getString("message")}"
+                    } catch (jsonException: JSONException) {
+                        "Unexpected server error ${result.responseCode}"
+                    }
+                )
             }
         }
 
         override fun onError(code: Int, message: String) {
-            handler.onError(code, message)
+            onErrorHandler(code, message)
         }
     }
 
@@ -77,8 +77,12 @@ internal class Backend(
         }
     }
 
-    fun getSubscriberInfo(appUserID: String, handler: BackendResponseHandler) {
-        enqueue(object : PurchaserInfoReceivingCall(handler) {
+    fun getSubscriberInfo(
+        appUserID: String,
+        onSuccessHandler: (PurchaserInfo) -> Unit,
+        onErrorHandler: (Int, String?) -> Unit
+    ) {
+        enqueue(object : PurchaserInfoReceivingCall(onSuccessHandler, onErrorHandler) {
             @Throws(HTTPClient.HTTPErrorException::class)
             override fun call(): HTTPClient.Result {
                 return httpClient.performRequest(
@@ -95,7 +99,8 @@ internal class Backend(
         appUserID: String,
         productID: String,
         isRestore: Boolean?,
-        handler: BackendResponseHandler
+        onSuccessHandler: (PurchaserInfo) -> Unit,
+        onErrorHandler: (Int, String?) -> Unit
     ) {
         val body = HashMap<String, Any?>()
 
@@ -104,7 +109,7 @@ internal class Backend(
         body["app_user_id"] = appUserID
         body["is_restore"] = isRestore
 
-        enqueue(object : PurchaserInfoReceivingCall(handler) {
+        enqueue(object : PurchaserInfoReceivingCall(onSuccessHandler, onErrorHandler) {
             @Throws(HTTPClient.HTTPErrorException::class)
             override fun call(): HTTPClient.Result {
                 return httpClient.performRequest("/receipts", body, authenticationHeaders)

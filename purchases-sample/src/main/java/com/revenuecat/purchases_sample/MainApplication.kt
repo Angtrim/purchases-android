@@ -10,7 +10,6 @@ class MainApplication: Application() {
     override fun onCreate() {
         super.onCreate()
         Purchases.sharedInstance = Purchases.Builder(this, PURCHASES_KEY).build()
-        val instance = Purchases.sharedInstance
     }
 
 }
