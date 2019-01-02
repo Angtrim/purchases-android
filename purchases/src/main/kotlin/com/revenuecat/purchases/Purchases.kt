@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit
 
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import com.revenuecat.purchases.interfaces.PurchaseCompletedListener
+import com.revenuecat.purchases.interfaces.ReceiveEntitlementsListener
 import com.revenuecat.purchases.interfaces.ReceivePurchaserInfoListener
 
 /**
@@ -115,13 +116,13 @@ class Purchases @JvmOverloads internal constructor(
      *
      * @param [handler] Called when entitlements are available. Called immediately if entitlements are cached.
      */
-    fun getEntitlements(handler: GetEntitlementsHandler? = null) {
+    fun getEntitlements(handler: ReceiveEntitlementsListener? = null) {
         this.cachedEntitlements?.let {
-            handler?.onReceiveEntitlements(it)
+            handler?.onReceived(it, null)
         } ?: fetchAndCacheEntitlements(handler)
     }
 
-    private fun fetchAndCacheEntitlements(handler: GetEntitlementsHandler? = null) {
+    private fun fetchAndCacheEntitlements(handler: ReceiveEntitlementsListener? = null) {
         backend.getEntitlements(appUserID, object : Backend.EntitlementsResponseHandler() {
             override fun onReceiveEntitlements(entitlements: Map<String, Entitlement>) {
                 getSkuDetails(entitlements) { detailsByID ->
@@ -130,10 +131,12 @@ class Purchases @JvmOverloads internal constructor(
             }
 
             override fun onError(code: Int, message: String) {
-                handler?.onReceiveEntitlementsError(
-                    ErrorDomains.REVENUECAT_BACKEND,
-                    code,
-                    "Error fetching entitlements: $message"
+                handler?.onReceived(
+                    null, PurchasesError(
+                        ErrorDomains.REVENUECAT_BACKEND,
+                        code,
+                        "Error fetching entitlements: $message"
+                    )
                 )
             }
         })
@@ -315,7 +318,7 @@ class Purchases @JvmOverloads internal constructor(
     private fun populateSkuDetailsAndCallHandler(
         details: Map<String, SkuDetails>,
         entitlements: Map<String, Entitlement>,
-        handler: GetEntitlementsHandler?
+        handler: ReceiveEntitlementsListener?
     ) {
         entitlements.values.flatMap { it.offerings.values }.forEach { o ->
             if (details.containsKey(o.activeProductIdentifier)) {
@@ -325,7 +328,7 @@ class Purchases @JvmOverloads internal constructor(
             }
         }
         cachedEntitlements = entitlements
-        handler?.onReceiveEntitlements(entitlements)
+        handler?.onReceived(entitlements, null)
     }
 
     private fun getSkus(
@@ -734,24 +737,6 @@ class Purchases @JvmOverloads internal constructor(
         fun onReceiveSkus(skus: @JvmSuppressWildcards List<SkuDetails>)
     }
 
-    /**
-     * Used when retrieving entitlements
-     */
-    interface GetEntitlementsHandler {
-        /**
-         * Will be called after a successful fetch of entitlements
-         * @param entitlementMap Map of entitlements keyed by name
-         */
-        fun onReceiveEntitlements(entitlementMap: Map<String, Entitlement>)
-
-        /**
-         * Will be called if there was any problem fetching entitlements
-         * @param domain Can be REVENUECAT_BACKEND or PLAY_BILLING
-         * @param code The error code
-         * @param message Message of the error
-         */
-        fun onReceiveEntitlementsError(domain: ErrorDomains, code: Int, message: String)
-    }
 
     /**
      * Used when creating an alias
