@@ -404,18 +404,14 @@ class Purchases @JvmOverloads internal constructor(
                         billingWrapper.consumePurchase(purchase.purchaseToken)
                         deviceCache.cachePurchaserInfo(appUserID, info)
                         onSuccess(purchase, info)
-                    }, { code, message ->
-                        if (code < 500) {
+                    }, { error ->
+                        if (error.code < 500) {
                             billingWrapper.consumePurchase(purchase.purchaseToken)
                             postedTokens.remove(purchase.purchaseToken)
                         }
                         onError(
                             purchase,
-                            PurchasesError(
-                                ErrorDomains.REVENUECAT_BACKEND,
-                                code,
-                                message
-                            )
+                            error
                         )
                     })
             }
