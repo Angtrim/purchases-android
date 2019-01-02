@@ -50,7 +50,7 @@ class Purchases @JvmOverloads internal constructor(
     private val deviceCache: DeviceCache,
     var allowSharingPlayStoreAccount: Boolean = false,
     internal val postedTokens: HashSet<String> = HashSet(),
-    private var cachesLastChecked: Date? = null,
+    private var cachesLastUpdated: Date? = null,
     private var cachedEntitlements: Map<String, Entitlement>? = null
 ) : BillingWrapper.PurchasesUpdatedListener, Application.ActivityLifecycleCallbacks {
 
@@ -61,22 +61,22 @@ class Purchases @JvmOverloads internal constructor(
 
     private var shouldRefreshCaches = false
 
-    /**
-     * Adds a [PurchasesListener] to handle async updates from Purchases. Remember to remove the
-     * listener when needed (i.e. [Activity.onDestroy] if it's an activity to avoid memory leaks)
-     * @param [listener] Listener that will handle async updates from Purchases
-     */
-    var listener: PurchasesListener? = null
-        set(value) {
-            field = value
-            afterSetListener(value)
-        }
-
     private var purchaseCallbacks: MutableMap<String, PurchaseCompletedListener> = mutableMapOf()
 
     init {
-        this.appUserID = _appUserID?.also { identify(it) } ?:
-                getAnonymousID().also { allowSharingPlayStoreAccount = true }
+        if (_appUserID != null) {
+            this.appUserID = _appUserID.also {
+                identify(it)
+            }
+        } else {
+            this.appUserID = getAnonymousID().also {
+                allowSharingPlayStoreAccount = true
+                updateCaches()
+            }
+        }
+
+        billingWrapper.setListener(this)
+        application.registerActivityLifecycleCallbacks(this)
     }
 
     /**
@@ -115,11 +115,14 @@ class Purchases @JvmOverloads internal constructor(
      *
      * @param [handler] Called when entitlements are available. Called immediately if entitlements are cached.
      */
-    fun getEntitlements(handler: GetEntitlementsHandler) {
+    fun getEntitlements(handler: GetEntitlementsHandler? = null) {
         this.cachedEntitlements?.let {
-            handler.onReceiveEntitlements(it)
-        } ?: backend.getEntitlements(appUserID, object : Backend.EntitlementsResponseHandler() {
+            handler?.onReceiveEntitlements(it)
+        } ?: fetchAndCacheEntitlements(handler)
+    }
 
+    private fun fetchAndCacheEntitlements(handler: GetEntitlementsHandler? = null) {
+        backend.getEntitlements(appUserID, object : Backend.EntitlementsResponseHandler() {
             override fun onReceiveEntitlements(entitlements: Map<String, Entitlement>) {
                 getSkuDetails(entitlements) { detailsByID ->
                     populateSkuDetailsAndCallHandler(detailsByID, entitlements, handler)
@@ -127,7 +130,7 @@ class Purchases @JvmOverloads internal constructor(
             }
 
             override fun onError(code: Int, message: String) {
-                handler.onReceiveEntitlementsError(
+                handler?.onReceiveEntitlementsError(
                     ErrorDomains.REVENUECAT_BACKEND,
                     code,
                     "Error fetching entitlements: $message"
@@ -206,16 +209,7 @@ class Purchases @JvmOverloads internal constructor(
                                 val allPurchases = ArrayList(subsPurchasesList)
                                 allPurchases.addAll(inAppPurchasesList)
                                 if (allPurchases.isEmpty()) {
-                                    if (cachesLastChecked != null && Date().time - cachesLastChecked!!.time < 60000) {
-                                        emitCachePurchaserInfo {
-                                            completion.onReceived(it, null)
-                                        }
-                                    } else {
-                                        cachesLastChecked = Date()
-                                        getSubscriberInfo {
-                                            completion.onReceived(it, null)
-                                        }
-                                    }
+                                    getPurchaserInfo(completion)
                                 } else {
                                     postPurchases(
                                         allPurchases,
@@ -283,12 +277,16 @@ class Purchases @JvmOverloads internal constructor(
      * Typically this would be used after a log out to identify a new user without calling configure
      * @param appUserID The new appUserID that should be linked to the currently user
      */
-    fun identify(appUserID: String) {
-        clearCachedRandomId()
+    @JvmOverloads
+    fun identify(
+        appUserID: String,
+        completion: ReceivePurchaserInfoListener? = null
+    ) {
+        deviceCache.clearCachedAppUserID()
         this.appUserID = appUserID
         postedTokens.clear()
         purchaseCallbacks.clear()
-        makeCachesOutdatedAndNotifyIfNeeded()
+        makeCachesOutdatedAndNotifyIfNeeded(completion)
     }
 
     /**
@@ -308,27 +306,16 @@ class Purchases @JvmOverloads internal constructor(
     fun close() {
         purchaseCallbacks.clear()
         this.backend.close()
-        removeListener()
-    }
-
-    /**
-     * Removes the [PurchasesListener]. You should call this to avoid memory leaks.
-     * @note This method just sets [listener] to null
-     */
-    fun removeListener() {
-        listener = null
+        billingWrapper.setListener(null)
+        application.unregisterActivityLifecycleCallbacks(this)
     }
 
 // region Private Methods
 
-    private fun emitCachePurchaserInfo(f: (PurchaserInfo) -> Unit) {
-        deviceCache.getCachedPurchaserInfo(appUserID)?.let { f(it) }
-    }
-
     private fun populateSkuDetailsAndCallHandler(
         details: Map<String, SkuDetails>,
         entitlements: Map<String, Entitlement>,
-        handler: GetEntitlementsHandler
+        handler: GetEntitlementsHandler?
     ) {
         entitlements.values.flatMap { it.offerings.values }.forEach { o ->
             if (details.containsKey(o.activeProductIdentifier)) {
@@ -338,7 +325,7 @@ class Purchases @JvmOverloads internal constructor(
             }
         }
         cachedEntitlements = entitlements
-        handler.onReceiveEntitlements(entitlements)
+        handler?.onReceiveEntitlements(entitlements)
     }
 
     private fun getSkus(
@@ -356,44 +343,53 @@ class Purchases @JvmOverloads internal constructor(
             })
     }
 
-    private fun getCaches() {
-        if (cachesLastChecked != null && Date().time - cachesLastChecked!!.time < 60000) {
-            emitCachePurchaserInfo { listener?.onReceiveUpdatedPurchaserInfo(it) }
+    private fun getPurchaserInfo(
+        completion: ReceivePurchaserInfoListener
+    ) {
+        if (cachesAreValid()) {
+            completion.onReceived(deviceCache.getCachedPurchaserInfo(appUserID), null)
         } else {
-            cachesLastChecked = Date()
-
-            getSubscriberInfo { listener?.onReceiveUpdatedPurchaserInfo(it) }
-
-            getEntitlements(object : GetEntitlementsHandler {
-                override fun onReceiveEntitlements(entitlementMap: Map<String, Entitlement>) {}
-
-                override fun onReceiveEntitlementsError(
-                    domain: ErrorDomains,
-                    code: Int,
-                    message: String
-                ) {
-                }
-            })
+            updateCaches(completion)
         }
     }
 
-    private fun getSubscriberInfo(onReceived: (PurchaserInfo) -> Unit) {
-        backend.getSubscriberInfo(
+    private fun updateCaches(
+        completion: ReceivePurchaserInfoListener? = null
+    ) {
+        fetchAndCachePurchaserInfo(completion)
+        fetchAndCacheEntitlements()
+    }
+
+    private fun fetchAndCachePurchaserInfo(completion: ReceivePurchaserInfoListener?) {
+        backend.getPurchaserInfo(
             appUserID,
             { info ->
-                deviceCache.cachePurchaserInfo(appUserID, info)
-                onReceived(info)
+                cachePurchaserInfo(info)
+                completion?.onReceived(info, null)
             },
-            { _, message ->
-                Log.e("Purchases", "Error fetching subscriber data: $message")
-                cachesLastChecked = null
+            { error ->
+                Log.e("Purchases", "Error fetching subscriber data: ${error.message}")
+                invalidateCaches()
+                completion?.onReceived(null, error)
             })
+    }
+
+    private fun cachesAreValid() =
+        cachesLastUpdated != null && Date().time - cachesLastUpdated!!.time < 60000
+
+    private fun invalidateCaches() {
+        cachesLastUpdated = null
+    }
+
+    private fun cachePurchaserInfo(info: PurchaserInfo) {
+        cachesLastUpdated = Date()
+        deviceCache.cachePurchaserInfo(appUserID, info)
     }
 
     private fun postPurchases(
         purchases: List<Purchase>,
         allowSharingPlayStoreAccount: Boolean,
-        completion: (Purchase, PurchaserInfo) -> Unit,
+        onSuccess: (Purchase, PurchaserInfo) -> Unit,
         onError: (Purchase, PurchasesError) -> Unit
     ) {
         purchases.filter { !postedTokens.contains(it.purchaseToken) }
@@ -407,7 +403,7 @@ class Purchases @JvmOverloads internal constructor(
                     { info ->
                         billingWrapper.consumePurchase(purchase.purchaseToken)
                         deviceCache.cachePurchaserInfo(appUserID, info)
-                        completion(purchase, info)
+                        onSuccess(purchase, info)
                     }, { code, message ->
                         if (code < 500) {
                             billingWrapper.consumePurchase(purchase.purchaseToken)
@@ -433,10 +429,6 @@ class Purchases @JvmOverloads internal constructor(
         return UUID.randomUUID().toString().also {
             deviceCache.cacheAppUserID(it)
         }
-    }
-
-    private fun clearCachedRandomId() {
-        deviceCache.clearCachedAppUserID()
     }
 
     private fun getSkuDetails(
@@ -478,22 +470,11 @@ class Purchases @JvmOverloads internal constructor(
         )
     }
 
-    private fun afterSetListener(value: PurchasesListener?) {
-        if (value != null) {
-            billingWrapper.setListener(this)
-            application.registerActivityLifecycleCallbacks(this)
-            getCaches()
-        } else {
-            billingWrapper.setListener(null)
-            application.unregisterActivityLifecycleCallbacks(this)
-        }
-    }
-
-    private fun makeCachesOutdatedAndNotifyIfNeeded() {
-        cachesLastChecked = null
-        if (listener != null) {
-            getCaches()
-        }
+    private fun makeCachesOutdatedAndNotifyIfNeeded(
+        completion: ReceivePurchaserInfoListener? = null
+    ) {
+        invalidateCaches()
+        updateCaches(completion)
     }
 
 // endregion
@@ -509,7 +490,11 @@ class Purchases @JvmOverloads internal constructor(
                 purchaseCallbacks.remove(purchase.sku)?.onCompleted(purchase.sku, info, null)
             },
             { purchase, error ->
-                purchaseCallbacks.remove(purchase.sku)?.onCompleted(null, null, PurchasesError(error.domain, error.code, error.message))
+                purchaseCallbacks.remove(purchase.sku)?.onCompleted(
+                    null,
+                    null,
+                    PurchasesError(error.domain, error.code, error.message)
+                )
             }
         )
     }
@@ -524,7 +509,11 @@ class Purchases @JvmOverloads internal constructor(
     ) {
         // TODO: this will send error to all purchases on queue
         purchases?.mapNotNull { purchaseCallbacks.remove(it.sku) }?.forEach {
-            it.onCompleted(null, null, PurchasesError(ErrorDomains.PLAY_BILLING, responseCode, message))
+            it.onCompleted(
+                null,
+                null,
+                PurchasesError(ErrorDomains.PLAY_BILLING, responseCode, message)
+            )
         }
     }
 
@@ -546,7 +535,7 @@ class Purchases @JvmOverloads internal constructor(
      * @suppress
      */
     override fun onActivityResumed(activity: Activity) {
-        if (shouldRefreshCaches) getCaches()
+        if (shouldRefreshCaches) updateCaches()
         shouldRefreshCaches = false
     }
 

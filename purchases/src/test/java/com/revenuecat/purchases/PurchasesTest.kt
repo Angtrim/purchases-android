@@ -62,7 +62,7 @@ class PurchasesTest {
         } just Runs
 
         every {
-            mockBackend.getSubscriberInfo(eq(appUserId), capture(capturedSubscriberInfoHandler))
+            mockBackend.getPurchaserInfo(eq(appUserId), capture(capturedSubscriberInfoHandler))
         } answers {
             capturedSubscriberInfoHandler.captured.onReceivePurchaserInfo(mockk())
         }
@@ -306,7 +306,7 @@ class PurchasesTest {
         capturedActivityLifecycleCallbacks.captured.onActivityResumed(mockk())
 
         verify {
-            mockBackend.getSubscriberInfo(eq(appUserId), any())
+            mockBackend.getPurchaserInfo(eq(appUserId), any())
         }
         verify(exactly = 2) {
             listener.onReceiveUpdatedPurchaserInfo(any())
@@ -318,7 +318,7 @@ class PurchasesTest {
         setup()
 
         verify {
-            mockBackend.getSubscriberInfo(eq(appUserId), any())
+            mockBackend.getPurchaserInfo(eq(appUserId), any())
         }
     }
 
@@ -1214,7 +1214,7 @@ class PurchasesTest {
         }
 
         every {
-            mockBackend.getSubscriberInfo(eq("new_id"), capture(capturedSubscriberInfoHandler))
+            mockBackend.getPurchaserInfo(eq("new_id"), capture(capturedSubscriberInfoHandler))
         } answers {
             capturedSubscriberInfoHandler.captured.onReceivePurchaserInfo(mockk())
         }
@@ -1239,7 +1239,7 @@ class PurchasesTest {
         setup()
 
         every {
-            mockBackend.getSubscriberInfo(eq("new_id"), capture(capturedSubscriberInfoHandler))
+            mockBackend.getPurchaserInfo(eq("new_id"), capture(capturedSubscriberInfoHandler))
         } answers {
             capturedSubscriberInfoHandler.captured.onReceivePurchaserInfo(mockk())
         }

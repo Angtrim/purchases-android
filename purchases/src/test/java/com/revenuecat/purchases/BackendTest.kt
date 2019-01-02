@@ -164,7 +164,7 @@ class BackendTest {
         val info =
             mockResponse("/subscribers/$appUserID", null, responseCode, clientException, resultBody)
 
-        backend.getSubscriberInfo(appUserID, handler)
+        backend.getPurchaserInfo(appUserID, handler)
 
         return info
     }
