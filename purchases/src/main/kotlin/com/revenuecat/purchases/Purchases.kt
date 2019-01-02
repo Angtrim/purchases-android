@@ -261,16 +261,19 @@ class Purchases @JvmOverloads internal constructor(
      * @param [newAppUserID] The current user id will be aliased to the app user id passed in this parameter
      * @param [handler] An optional handler to listen for successes or errors.
      */
-    fun createAlias(newAppUserID: String, handler: AliasHandler?) {
+    @JvmOverloads
+    fun createAlias(
+        newAppUserID: String,
+        handler: ReceivePurchaserInfoListener? = null
+    ) {
         backend.createAlias(
             appUserID,
             newAppUserID,
             {
-                identify(newAppUserID)
-                handler?.onSuccess()
+                identify(newAppUserID, handler)
             },
-            { code, message ->
-                handler?.onError(ErrorDomains.REVENUECAT_BACKEND, code, message)
+            { error ->
+                handler?.onReceived(null, error)
             }
         )
     }
@@ -313,6 +316,16 @@ class Purchases @JvmOverloads internal constructor(
         application.unregisterActivityLifecycleCallbacks(this)
     }
 
+    fun getPurchaserInfo(
+        completion: ReceivePurchaserInfoListener
+    ) {
+        if (cachesAreValid()) {
+            completion.onReceived(deviceCache.getCachedPurchaserInfo(appUserID), null)
+        } else {
+            updateCaches(completion)
+        }
+    }
+
 // region Private Methods
 
     private fun populateSkuDetailsAndCallHandler(
@@ -344,16 +357,6 @@ class Purchases @JvmOverloads internal constructor(
                     handler.onReceiveSkus(skuDetails)
                 }
             })
-    }
-
-    private fun getPurchaserInfo(
-        completion: ReceivePurchaserInfoListener
-    ) {
-        if (cachesAreValid()) {
-            completion.onReceived(deviceCache.getCachedPurchaserInfo(appUserID), null)
-        } else {
-            updateCaches(completion)
-        }
     }
 
     private fun updateCaches(
@@ -735,25 +738,6 @@ class Purchases @JvmOverloads internal constructor(
          * @param skus List of SkuDetails
          */
         fun onReceiveSkus(skus: @JvmSuppressWildcards List<SkuDetails>)
-    }
-
-
-    /**
-     * Used when creating an alias
-     */
-    interface AliasHandler {
-        /**
-         * Will be called after a successful create alias call
-         */
-        fun onSuccess()
-
-        /**
-         * Will be called if an error happened while creating the alias
-         * @param domain Can be REVENUECAT_BACKEND or PLAY_BILLING
-         * @param code The error code
-         * @param message Message of the error
-         */
-        fun onError(domain: ErrorDomains, code: Int, message: String)
     }
 
 }

@@ -194,7 +194,7 @@ internal class Backend(
         appUserID: String,
         newAppUserID: String,
         onSuccessHandler: () -> Unit,
-        onErrorHandler: (Int, String) -> Unit
+        onErrorHandler: (PurchasesError) -> Unit
     ) {
         val body = mapOf(
             "new_app_user_id" to newAppUserID
@@ -211,7 +211,7 @@ internal class Backend(
             }
 
             override fun onError(code: Int, message: String) {
-                onErrorHandler(code, message)
+                onErrorHandler(PurchasesError(Purchases.ErrorDomains.REVENUECAT_BACKEND, code, message))
             }
 
             override fun onCompletion(result: HTTPClient.Result) {
@@ -219,10 +219,18 @@ internal class Backend(
                     try {
                         onSuccessHandler()
                     } catch (e: JSONException) {
-                        onErrorHandler(result.responseCode, "Backend error")
+                        onErrorHandler(PurchasesError(
+                            Purchases.ErrorDomains.REVENUECAT_BACKEND,
+                            result.responseCode,
+                            "Backend error"
+                        ))
                     }
                 } else {
-                    onErrorHandler(result.responseCode, "Backend error")
+                    onErrorHandler(PurchasesError(
+                        Purchases.ErrorDomains.REVENUECAT_BACKEND,
+                        result.responseCode,
+                        "Backend error"
+                    ))
                 }
             }
         })
