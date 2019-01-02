@@ -19,6 +19,7 @@ import com.revenuecat.purchases.Offering;
 import com.revenuecat.purchases.PurchaserInfo;
 import com.revenuecat.purchases.Purchases;
 import com.revenuecat.purchases.PurchasesError;
+import com.revenuecat.purchases.interfaces.PurchaseCompletedListener;
 import com.revenuecat.purchases.interfaces.ReceivePurchaserInfoListener;
 
 import java.util.ArrayList;
@@ -40,6 +41,7 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
     private Map<String, Entitlement> entitlementMap;
 
     private boolean useAlternateID = false;
+
     private String currentAppUserID() {
         return useAlternateID ? "cesar5" : "random1";
     }
@@ -66,7 +68,21 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
         mButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                purchases.makePurchase(MainActivity.this, monthlySkuDetails.getSku(), monthlySkuDetails.getType());
+                purchases.makePurchase(
+                        MainActivity.this,
+                        monthlySkuDetails.getSku(),
+                        monthlySkuDetails.getType(),
+                        new PurchaseCompletedListener() {
+                            @Override
+                            public void onCompleted(@Nullable String sku, @Nullable PurchaserInfo purchaserInfo, @Nullable PurchasesError error) {
+                                if (error == null) {
+                                    Log.i("Purchases", "Purchase completed: " + purchaserInfo);
+                                    onReceiveUpdatedPurchaserInfo(purchaserInfo);
+                                } else {
+                                    purchases.setAllowSharingPlayStoreAccount(true);
+                                }
+                            }
+                        });
             }
         });
         mButton.setEnabled(false);
@@ -75,7 +91,21 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
         mConsumableButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                purchases.makePurchase(MainActivity.this, consumableSkuDetails.getSku(), consumableSkuDetails.getType());
+                purchases.makePurchase(
+                        MainActivity.this,
+                        consumableSkuDetails.getSku(),
+                        consumableSkuDetails.getType(),
+                        new PurchaseCompletedListener() {
+                            @Override
+                            public void onCompleted(@Nullable String sku, @Nullable PurchaserInfo purchaserInfo, @Nullable PurchasesError error) {
+                                if (error == null) {
+                                    Log.i("Purchases", "Purchase completed: " + purchaserInfo);
+                                    onReceiveUpdatedPurchaserInfo(purchaserInfo);
+                                } else {
+                                    purchases.setAllowSharingPlayStoreAccount(true);
+                                }
+                            }
+                        });
             }
         });
         mConsumableButton.setEnabled(false);
@@ -150,18 +180,6 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
     }
 
     @Override
-    public void onCompletedPurchase(String sku, PurchaserInfo purchaserInfo) {
-        Log.i("Purchases", "Purchase completed: " + purchaserInfo);
-        onReceiveUpdatedPurchaserInfo(purchaserInfo);
-    }
-
-    @Override
-    public void onFailedPurchase(Purchases.ErrorDomains domain, int code, String reason) {
-        Log.i("Purchases", reason);
-        purchases.setAllowSharingPlayStoreAccount(true);
-    }
-
-    @Override
     public void onReceiveUpdatedPurchaserInfo(final PurchaserInfo purchaserInfo) {
         Log.i("Purchases", "Got new purchaser info: " + purchaserInfo.getActiveSubscriptions());
         Log.i("Purchases", "Consumable: " + purchaserInfo.getAllPurchasedSkus());
@@ -215,6 +233,7 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
 
         class ViewHolder extends RecyclerView.ViewHolder {
             TextView mTextView;
+
             ViewHolder(TextView view) {
                 super(view);
                 mTextView = view;

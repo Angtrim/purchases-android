@@ -27,6 +27,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 import android.content.pm.PackageManager.PERMISSION_GRANTED
+import com.revenuecat.purchases.interfaces.PurchaseCompletedListener
 import com.revenuecat.purchases.interfaces.ReceivePurchaserInfoListener
 
 /**
@@ -163,7 +164,8 @@ class Purchases @JvmOverloads internal constructor(
         activity: Activity,
         sku: String,
         @BillingClient.SkuType skuType: String,
-        oldSkus: ArrayList<String> = ArrayList()
+        oldSkus: ArrayList<String> = ArrayList(),
+        completion: PurchaseCompletedListener
     ) {
         billingWrapper.makePurchaseAsync(activity, appUserID, sku, oldSkus, skuType)
     }
@@ -699,26 +701,10 @@ class Purchases @JvmOverloads internal constructor(
      */
     interface PurchasesListener {
         /**
-         * Called when purchase completes after a make purchase call or after a renewal
-         * @param sku Sku of the purchased product
-         * @param purchaserInfo Updated purchaser info after a successful purchase
-         */
-        fun onCompletedPurchase(sku: String, purchaserInfo: PurchaserInfo)
-
-        /**
-         * Called when purchase fails after trying to make a purchase
-         * @param domain Can be REVENUECAT_BACKEND or PLAY_BILLING
-         * @param code The error code
-         * @param reason Message of the error
-         */
-        fun onFailedPurchase(domain: ErrorDomains, code: Int, reason: String?)
-
-        /**
          * Called when a new purchaser info has been received
          * @param purchaserInfo Updated purchaser info after a successful purchase
          */
         fun onReceiveUpdatedPurchaserInfo(purchaserInfo: PurchaserInfo)
-
     }
 
     /**

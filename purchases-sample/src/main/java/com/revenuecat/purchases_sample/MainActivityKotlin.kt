@@ -14,6 +14,7 @@ import com.android.billingclient.api.SkuDetails
 import com.revenuecat.purchases.Entitlement
 import com.revenuecat.purchases.PurchaserInfo
 import com.revenuecat.purchases.Purchases
+import com.revenuecat.purchases.interfaces.PurchaseCompletedListener
 import com.revenuecat.purchases.interfaces.ReceivePurchaserInfoListener
 
 import java.util.ArrayList
@@ -58,11 +59,15 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
             purchases!!.makePurchase(
                 this@MainActivityKotlin,
                 monthlySkuDetails!!.sku,
-                monthlySkuDetails!!.type
-            )
-            purchases!!.restorePurchases(ReceivePurchaserInfoListener { purchaserInfo, error ->
-
-            })
+                monthlySkuDetails!!.type,
+                completion = PurchaseCompletedListener { sku, purchaserInfo, error ->
+                    if (error == null) {
+                        Log.i("Purchases", "Purchase completed: $purchaserInfo")
+                        onReceiveUpdatedPurchaserInfo(purchaserInfo!!)
+                    } else {
+                        purchases!!.allowSharingPlayStoreAccount = true
+                    }
+                })
         }
         mButton!!.isEnabled = false
 
@@ -71,8 +76,15 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
             purchases!!.makePurchase(
                 this@MainActivityKotlin,
                 consumableSkuDetails!!.sku,
-                consumableSkuDetails!!.type
-            )
+                consumableSkuDetails!!.type,
+                completion = PurchaseCompletedListener { sku, purchaserInfo, error ->
+                    if (error == null) {
+                        Log.i("Purchases", "Purchase completed: $purchaserInfo")
+                        onReceiveUpdatedPurchaserInfo(purchaserInfo!!)
+                    } else {
+                        purchases!!.allowSharingPlayStoreAccount = true
+                    }
+                })
         }
         mConsumableButton!!.isEnabled = false
 
@@ -124,16 +136,6 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
             }
         })
 
-    }
-
-    override fun onCompletedPurchase(sku: String, purchaserInfo: PurchaserInfo) {
-        Log.i("Purchases", "Purchase completed: $purchaserInfo")
-        onReceiveUpdatedPurchaserInfo(purchaserInfo)
-    }
-
-    override fun onFailedPurchase(domain: Purchases.ErrorDomains, code: Int, reason: String?) {
-        Log.i("Purchases", reason)
-        purchases!!.allowSharingPlayStoreAccount = true
     }
 
     override fun onReceiveUpdatedPurchaserInfo(purchaserInfo: PurchaserInfo) {
