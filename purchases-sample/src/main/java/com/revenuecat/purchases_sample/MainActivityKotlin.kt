@@ -77,7 +77,7 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
                 this@MainActivityKotlin,
                 consumableSkuDetails!!.sku,
                 consumableSkuDetails!!.type,
-                completion = PurchaseCompletedListener { sku, purchaserInfo, error ->
+                completion = PurchaseCompletedListener { _, purchaserInfo, error ->
                     if (error == null) {
                         Log.i("Purchases", "Purchase completed: $purchaserInfo")
                         onReceiveUpdatedPurchaserInfo(purchaserInfo!!)

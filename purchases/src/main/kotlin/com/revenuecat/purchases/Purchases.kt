@@ -152,6 +152,8 @@ class Purchases @JvmOverloads internal constructor(
         getSkus(skus, BillingClient.SkuType.INAPP, handler)
     }
 
+    private lateinit var purchaseCallbacks: MutableMap<String, PurchaseCompletedListener>
+
     /**
      * Make a purchase.
      * @param [activity] Current activity
@@ -167,6 +169,19 @@ class Purchases @JvmOverloads internal constructor(
         oldSkus: ArrayList<String> = ArrayList(),
         completion: PurchaseCompletedListener
     ) {
+        if (purchaseCallbacks.containsKey(sku)) {
+            completion.onCompleted(
+                null,
+                null,
+                PurchasesError(
+                    ErrorDomains.REVENUECAT_API,
+                    PurchasesAPIError.DUPLICATE_MAKE_PURCHASE_CALLS.ordinal,
+                    "Purchase already in progress for this product."
+                )
+            )
+        } else {
+            purchaseCallbacks[sku] = completion
+        }
         billingWrapper.makePurchaseAsync(activity, appUserID, sku, oldSkus, skuType)
     }
 
@@ -208,7 +223,7 @@ class Purchases @JvmOverloads internal constructor(
                                         { _, info ->
                                             completion.onReceived(info, null)
                                         },
-                                        { error ->
+                                        { _, error ->
                                             completion.onReceived(null, error)
                                         }
                                     )
@@ -376,26 +391,27 @@ class Purchases @JvmOverloads internal constructor(
         purchases: List<Purchase>,
         allowSharingPlayStoreAccount: Boolean,
         completion: (Purchase, PurchaserInfo) -> Unit,
-        onError: (PurchasesError) -> Unit
+        onError: (Purchase, PurchasesError) -> Unit
     ) {
         purchases.filter { !postedTokens.contains(it.purchaseToken) }
-            .forEach {
-                postedTokens.add(it.purchaseToken)
+            .forEach { purchase ->
+                postedTokens.add(purchase.purchaseToken)
                 backend.postReceiptData(
-                    it.purchaseToken,
+                    purchase.purchaseToken,
                     appUserID,
-                    it.sku,
+                    purchase.sku,
                     allowSharingPlayStoreAccount,
                     { info ->
-                        billingWrapper.consumePurchase(it.purchaseToken)
+                        billingWrapper.consumePurchase(purchase.purchaseToken)
                         deviceCache.cachePurchaserInfo(appUserID, info)
-                        completion(it, info)
+                        completion(purchase, info)
                     }, { code, message ->
                         if (code < 500) {
-                            billingWrapper.consumePurchase(it.purchaseToken)
-                            postedTokens.remove(it.purchaseToken)
+                            billingWrapper.consumePurchase(purchase.purchaseToken)
+                            postedTokens.remove(purchase.purchaseToken)
                         }
                         onError(
+                            purchase,
                             PurchasesError(
                                 ErrorDomains.REVENUECAT_BACKEND,
                                 code,
@@ -487,10 +503,10 @@ class Purchases @JvmOverloads internal constructor(
             purchases,
             allowSharingPlayStoreAccount,
             { purchase, info ->
-                listener?.onCompletedPurchase(purchase.sku, info)
+                purchaseCallbacks.remove(purchase.sku)?.onCompleted(purchase.sku, info, null)
             },
-            { error ->
-                listener?.onFailedPurchase(error.domain, error.code, error.message)
+            { purchase, error ->
+                purchaseCallbacks.remove(purchase.sku)?.onCompleted(null, null, PurchasesError(error.domain, error.code, error.message))
             }
         )
     }
@@ -498,8 +514,15 @@ class Purchases @JvmOverloads internal constructor(
     /**
      * @suppress
      */
-    override fun onPurchasesFailedToUpdate(responseCode: Int, message: String) {
-        listener?.onFailedPurchase(ErrorDomains.PLAY_BILLING, responseCode, message)
+    override fun onPurchasesFailedToUpdate(
+        purchases: List<Purchase>?,
+        @BillingClient.BillingResponse responseCode: Int,
+        message: String
+    ) {
+        // TODO: this will send error to all purchases on queue
+        purchases?.mapNotNull { purchaseCallbacks.remove(it.sku) }?.forEach {
+            it.onCompleted(null, null, PurchasesError(ErrorDomains.PLAY_BILLING, responseCode, message))
+        }
     }
 
     /**
@@ -673,7 +696,12 @@ class Purchases @JvmOverloads internal constructor(
         /**
          * The error is related to Play Billing
          */
-        PLAY_BILLING
+        PLAY_BILLING,
+        REVENUECAT_API
+    }
+
+    enum class PurchasesAPIError {
+        DUPLICATE_MAKE_PURCHASE_CALLS
     }
 
     /**

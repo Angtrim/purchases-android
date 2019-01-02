@@ -50,7 +50,7 @@ internal class BillingWrapper internal constructor(
 
     interface PurchasesUpdatedListener {
         fun onPurchasesUpdated(purchases: List<Purchase>)
-        fun onPurchasesFailedToUpdate(@BillingClient.BillingResponse responseCode: Int, message: String)
+        fun onPurchasesFailedToUpdate(purchases: List<Purchase>?, @BillingClient.BillingResponse responseCode: Int, message: String)
     }
 
     internal fun setListener(purchasesUpdatedListener: PurchasesUpdatedListener?) {
@@ -168,15 +168,15 @@ internal class BillingWrapper internal constructor(
     }
 
     override fun onPurchasesUpdated(responseCode: Int, purchases: List<Purchase>?) {
-        var responseCode = responseCode
         if (responseCode == BillingClient.BillingResponse.OK && purchases != null) {
             purchasesUpdatedListener!!.onPurchasesUpdated(purchases)
         } else {
-            if (purchases == null && responseCode == BillingClient.BillingResponse.OK) {
-                responseCode = BillingClient.BillingResponse.ERROR
-            }
             purchasesUpdatedListener!!.onPurchasesFailedToUpdate(
-                responseCode,
+                purchases,
+                if (purchases == null && responseCode == BillingClient.BillingResponse.OK)
+                    BillingClient.BillingResponse.ERROR
+                else
+                    responseCode,
                 "Error updating purchases $responseCode"
             )
         }
