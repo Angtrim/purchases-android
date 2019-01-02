@@ -72,6 +72,8 @@ class Purchases @JvmOverloads internal constructor(
             afterSetListener(value)
         }
 
+    private var purchaseCallbacks: MutableMap<String, PurchaseCompletedListener> = mutableMapOf()
+
     init {
         this.appUserID = _appUserID?.also { identify(it) } ?:
                 getAnonymousID().also { allowSharingPlayStoreAccount = true }
@@ -151,8 +153,6 @@ class Purchases @JvmOverloads internal constructor(
     fun getNonSubscriptionSkus(skus: List<String>, handler: GetSkusResponseHandler) {
         getSkus(skus, BillingClient.SkuType.INAPP, handler)
     }
-
-    private lateinit var purchaseCallbacks: MutableMap<String, PurchaseCompletedListener>
 
     /**
      * Make a purchase.
@@ -287,6 +287,7 @@ class Purchases @JvmOverloads internal constructor(
         clearCachedRandomId()
         this.appUserID = appUserID
         postedTokens.clear()
+        purchaseCallbacks.clear()
         makeCachesOutdatedAndNotifyIfNeeded()
     }
 
@@ -297,6 +298,7 @@ class Purchases @JvmOverloads internal constructor(
         this.appUserID = createRandomIDAndCacheIt()
         allowSharingPlayStoreAccount = true
         postedTokens.clear()
+        purchaseCallbacks.clear()
         makeCachesOutdatedAndNotifyIfNeeded()
     }
 
@@ -304,6 +306,7 @@ class Purchases @JvmOverloads internal constructor(
      * Call close when you are done with this instance of Purchases
      */
     fun close() {
+        purchaseCallbacks.clear()
         this.backend.close()
         removeListener()
     }
