@@ -203,57 +203,30 @@ class Purchases @JvmOverloads internal constructor(
     ) {
         billingWrapper.queryPurchaseHistoryAsync(
             BillingClient.SkuType.SUBS,
-            object : BillingWrapper.PurchaseHistoryResponseListener {
-                override fun onReceivePurchaseHistory(subsPurchasesList: List<Purchase>) {
-                    billingWrapper.queryPurchaseHistoryAsync(
-                        BillingClient.SkuType.INAPP,
-                        object : BillingWrapper.PurchaseHistoryResponseListener {
-                            override fun onReceivePurchaseHistory(inAppPurchasesList: List<Purchase>) {
-                                val allPurchases = ArrayList(subsPurchasesList)
-                                allPurchases.addAll(inAppPurchasesList)
-                                if (allPurchases.isEmpty()) {
-                                    getPurchaserInfo(completion)
-                                } else {
-                                    postPurchases(
-                                        allPurchases,
-                                        true,
-                                        { _, info ->
-                                            completion.onReceived(info, null)
-                                        },
-                                        { _, error ->
-                                            completion.onReceived(null, error)
-                                        }
-                                    )
+            { subsPurchasesList ->
+                billingWrapper.queryPurchaseHistoryAsync(
+                    BillingClient.SkuType.INAPP,
+                    { inAppPurchasesList ->
+                        val allPurchases = ArrayList(subsPurchasesList)
+                        allPurchases.addAll(inAppPurchasesList)
+                        if (allPurchases.isEmpty()) {
+                            getPurchaserInfo(completion)
+                        } else {
+                            postPurchases(
+                                allPurchases,
+                                true,
+                                { _, info ->
+                                    completion.onReceived(info, null)
+                                },
+                                { _, error ->
+                                    completion.onReceived(null, error)
                                 }
-                            }
-
-                            override fun onReceivePurchaseHistoryError(
-                                responseCode: Int,
-                                message: String
-                            ) {
-                                completion.onReceived(
-                                    null,
-                                    PurchasesError(
-                                        ErrorDomains.PLAY_BILLING,
-                                        responseCode,
-                                        message
-                                    )
-                                )
-                            }
-                        })
-                }
-
-                override fun onReceivePurchaseHistoryError(responseCode: Int, message: String) {
-                    completion.onReceived(
-                        null,
-                        PurchasesError(
-                            ErrorDomains.PLAY_BILLING,
-                            responseCode,
-                            message
-                        )
-                    )
-                }
-            })
+                            )
+                        }
+                    },
+                    { error -> completion.onReceived(null, error) })
+            },
+            { error -> completion.onReceived(null, error) })
     }
 
     /**

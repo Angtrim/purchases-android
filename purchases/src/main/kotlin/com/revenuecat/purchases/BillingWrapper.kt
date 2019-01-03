@@ -39,11 +39,6 @@ internal class BillingWrapper internal constructor(
         }
     }
 
-    interface PurchaseHistoryResponseListener {
-        fun onReceivePurchaseHistory(purchasesList: List<Purchase>)
-        fun onReceivePurchaseHistoryError(@BillingClient.BillingResponse responseCode: Int, message: String)
-    }
-
     interface PurchasesUpdatedListener {
         fun onPurchasesUpdated(purchases: List<Purchase>)
         fun onPurchasesFailedToUpdate(purchases: List<Purchase>?, @BillingClient.BillingResponse responseCode: Int, message: String)
@@ -139,16 +134,20 @@ internal class BillingWrapper internal constructor(
 
     fun queryPurchaseHistoryAsync(
         @BillingClient.SkuType skuType: String,
-        listener: PurchaseHistoryResponseListener
+        onReceivePurchaseHistory: (List<Purchase>) -> Unit,
+        onReceivePurchaseHistoryError: (PurchasesError) -> Unit
     ) {
         executeRequest(Runnable {
             billingClient!!.queryPurchaseHistoryAsync(skuType) { responseCode, purchasesList ->
                 if (responseCode == BillingClient.BillingResponse.OK) {
-                    listener.onReceivePurchaseHistory(purchasesList)
+                    onReceivePurchaseHistory(purchasesList)
                 } else {
-                    listener.onReceivePurchaseHistoryError(
-                        responseCode,
-                        "Error receiving purchase history"
+                    onReceivePurchaseHistoryError(
+                        PurchasesError(
+                            Purchases.ErrorDomains.PLAY_BILLING,
+                            responseCode,
+                            "Error receiving purchase history"
+                        )
                     )
                 }
             }
