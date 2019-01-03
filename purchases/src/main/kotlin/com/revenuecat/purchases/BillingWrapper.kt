@@ -39,10 +39,6 @@ internal class BillingWrapper internal constructor(
         }
     }
 
-    interface SkuDetailsResponseListener {
-        fun onReceiveSkuDetails(skuDetails: List<SkuDetails>)
-    }
-
     interface PurchaseHistoryResponseListener {
         fun onReceivePurchaseHistory(purchasesList: List<Purchase>)
         fun onReceivePurchaseHistoryError(@BillingClient.BillingResponse responseCode: Int, message: String)
@@ -105,17 +101,13 @@ internal class BillingWrapper internal constructor(
     fun querySkuDetailsAsync(
         @BillingClient.SkuType itemType: String,
         skuList: List<String>,
-        listener: SkuDetailsResponseListener
+        onReceiveSkuDetails: (List<SkuDetails>) -> Unit
     ) {
         executeRequest(Runnable {
             val params = SkuDetailsParams.newBuilder()
                 .setType(itemType).setSkusList(skuList).build()
-            billingClient!!.querySkuDetailsAsync(params) { responseCode, skuDetailsList ->
-                var skuDetailsList = skuDetailsList
-                if (skuDetailsList == null) {
-                    skuDetailsList = ArrayList()
-                }
-                listener.onReceiveSkuDetails(skuDetailsList)
+            billingClient!!.querySkuDetailsAsync(params) { _, skuDetailsList ->
+                onReceiveSkuDetails(skuDetailsList?: emptyList())
             }
         })
     }

@@ -351,12 +351,11 @@ class Purchases @JvmOverloads internal constructor(
     ) {
         billingWrapper.querySkuDetailsAsync(
             skuType,
-            skus,
-            object : BillingWrapper.SkuDetailsResponseListener {
-                override fun onReceiveSkuDetails(skuDetails: List<SkuDetails>) {
-                    handler.onReceiveSkus(skuDetails)
-                }
-            })
+            skus
+        ) { skuDetails ->
+            handler.onReceiveSkus(skuDetails)
+
+        }
     }
 
     private fun updateCaches(
@@ -442,34 +441,27 @@ class Purchases @JvmOverloads internal constructor(
 
         billingWrapper.querySkuDetailsAsync(
             BillingClient.SkuType.SUBS,
-            skus,
-            object : BillingWrapper.SkuDetailsResponseListener {
-                override fun onReceiveSkuDetails(subscriptionsSKUDetails: List<SkuDetails>) {
-                    val detailsByID = HashMap<String, SkuDetails>()
+            skus
+        ) { subscriptionsSKUDetails ->
+            val detailsByID = HashMap<String, SkuDetails>()
+            val inAPPSkus =
+                skus - subscriptionsSKUDetails
+                    .map { details -> details.sku to details }
+                    .also { skuToDetails -> detailsByID.putAll(skuToDetails) }
+                    .map { skuToDetails -> skuToDetails.first }
 
-                    val inAPPSkus = skus -
-                            subscriptionsSKUDetails
-                                .map { details -> details.sku to details }
-                                .also { skuToDetails -> detailsByID.putAll(skuToDetails) }
-                                .map { skuToDetails -> skuToDetails.first }
-
-                    if (inAPPSkus.isNotEmpty()) {
-                        billingWrapper.querySkuDetailsAsync(
-                            BillingClient.SkuType.INAPP,
-                            inAPPSkus,
-                            object : BillingWrapper.SkuDetailsResponseListener {
-                                override fun onReceiveSkuDetails(skuDetails: List<SkuDetails>) {
-                                    detailsByID.putAll(skuDetails.map { it.sku to it })
-                                    onCompleted(detailsByID)
-                                }
-                            }
-                        )
-                    } else {
-                        onCompleted(detailsByID)
-                    }
+            if (inAPPSkus.isNotEmpty()) {
+                billingWrapper.querySkuDetailsAsync(
+                    BillingClient.SkuType.INAPP,
+                    inAPPSkus
+                ) { skuDetails ->
+                    detailsByID.putAll(skuDetails.map { it.sku to it })
+                    onCompleted(detailsByID)
                 }
+            } else {
+                onCompleted(detailsByID)
             }
-        )
+        }
     }
 
     private fun makeCachesOutdatedAndNotifyIfNeeded(
