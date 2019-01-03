@@ -22,16 +22,6 @@ internal class Backend(
         abstract fun onError(code: Int, message: String?)
     }
 
-    abstract class EntitlementsResponseHandler {
-        abstract fun onReceiveEntitlements(entitlements: Map<String, Entitlement>)
-        abstract fun onError(code: Int, message: String)
-    }
-
-    abstract class AliasResponseHandler {
-        abstract fun onSuccess()
-        abstract fun onError(code: Int, message: String)
-    }
-
     private abstract inner class PurchaserInfoReceivingCall internal constructor(
         private val onSuccessHandler: (PurchaserInfo) -> Unit,
         private val onErrorHandler: (PurchasesError) -> Unit
@@ -124,7 +114,11 @@ internal class Backend(
         })
     }
 
-    fun getEntitlements(appUserID: String, handler: EntitlementsResponseHandler) {
+    fun getEntitlements(
+        appUserID: String,
+        onSuccess: (Map<String, Entitlement>) -> Unit,
+        onError: (PurchasesError) -> Unit
+    ) {
         enqueue(object : Dispatcher.AsyncCall() {
             @Throws(HTTPClient.HTTPErrorException::class)
             override fun call(): HTTPClient.Result {
@@ -136,7 +130,7 @@ internal class Backend(
             }
 
             override fun onError(code: Int, message: String) {
-                handler.onError(code, message)
+                onError(PurchasesError(Purchases.ErrorDomains.REVENUECAT_BACKEND, code, message))
             }
 
             override fun onCompletion(result: HTTPClient.Result) {
@@ -144,16 +138,21 @@ internal class Backend(
                     try {
                         val entitlementsResponse = result.body!!.getJSONObject("entitlements")
                         val entitlementMap = entitlementFactory.build(entitlementsResponse)
-                        handler.onReceiveEntitlements(entitlementMap)
+                        onSuccess(entitlementMap)
                     } catch (e: JSONException) {
-                        handler.onError(
+                        onError(PurchasesError(
+                            Purchases.ErrorDomains.REVENUECAT_BACKEND,
                             result.responseCode,
                             "Error parsing products JSON " + e.localizedMessage
-                        )
+                        ))
                     }
 
                 } else {
-                    handler.onError(result.responseCode, "Backend error")
+                    onError(PurchasesError(
+                        Purchases.ErrorDomains.REVENUECAT_BACKEND,
+                        result.responseCode,
+                        "Backend error"
+                    ))
                 }
             }
         })

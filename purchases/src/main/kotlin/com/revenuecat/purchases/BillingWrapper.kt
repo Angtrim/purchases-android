@@ -33,7 +33,6 @@ internal class BillingWrapper internal constructor(
     private val serviceRequests = ConcurrentLinkedQueue<Runnable>()
 
     internal class ClientFactory(private val context: Context) {
-
         fun buildClient(listener: com.android.billingclient.api.PurchasesUpdatedListener): BillingClient {
             return BillingClient.newBuilder(context).setListener(listener).build()
         }

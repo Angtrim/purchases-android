@@ -123,23 +123,19 @@ class Purchases @JvmOverloads internal constructor(
     }
 
     private fun fetchAndCacheEntitlements(handler: ReceiveEntitlementsListener? = null) {
-        backend.getEntitlements(appUserID, object : Backend.EntitlementsResponseHandler() {
-            override fun onReceiveEntitlements(entitlements: Map<String, Entitlement>) {
+        backend.getEntitlements(
+            appUserID,
+            { entitlements ->
                 getSkuDetails(entitlements) { detailsByID ->
                     populateSkuDetailsAndCallHandler(detailsByID, entitlements, handler)
                 }
-            }
-
-            override fun onError(code: Int, message: String) {
+            },
+            { error ->
                 handler?.onReceived(
-                    null, PurchasesError(
-                        ErrorDomains.REVENUECAT_BACKEND,
-                        code,
-                        "Error fetching entitlements: $message"
-                    )
+                    null,
+                    error
                 )
-            }
-        })
+            })
     }
 
     /**
