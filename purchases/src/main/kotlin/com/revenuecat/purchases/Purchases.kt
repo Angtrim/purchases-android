@@ -27,6 +27,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 import android.content.pm.PackageManager.PERMISSION_GRANTED
+import android.support.annotation.VisibleForTesting
 import com.revenuecat.purchases.interfaces.PurchaseCompletedListener
 import com.revenuecat.purchases.interfaces.ReceiveEntitlementsListener
 import com.revenuecat.purchases.interfaces.ReceivePurchaserInfoListener
@@ -72,8 +73,8 @@ class Purchases @JvmOverloads internal constructor(
         } else {
             this.appUserID = getAnonymousID().also {
                 allowSharingPlayStoreAccount = true
-                updateCaches()
             }
+            updateCaches()
         }
 
         billingWrapper.setListener(this)
@@ -127,6 +128,7 @@ class Purchases @JvmOverloads internal constructor(
             appUserID,
             { entitlements ->
                 getSkuDetails(entitlements) { detailsByID ->
+                    cachedEntitlements = entitlements
                     populateSkuDetailsAndCallHandler(detailsByID, entitlements, handler)
                 }
             },
@@ -309,7 +311,6 @@ class Purchases @JvmOverloads internal constructor(
                 Log.e("Purchases", "Failed to find SKU for " + o.activeProductIdentifier)
             }
         }
-        cachedEntitlements = entitlements
         handler?.onReceived(entitlements, null)
     }
 
@@ -366,7 +367,7 @@ class Purchases @JvmOverloads internal constructor(
         onSuccess: (Purchase, PurchaserInfo) -> Unit,
         onError: (Purchase, PurchasesError) -> Unit
     ) {
-        purchases.filter { !postedTokens.contains(it.purchaseToken) }
+        purchases.distinctBy { it.purchaseToken }.filter { !postedTokens.contains(it.purchaseToken) }
             .forEach { purchase ->
                 postedTokens.add(purchase.purchaseToken)
                 backend.postReceiptData(
@@ -620,6 +621,9 @@ class Purchases @JvmOverloads internal constructor(
 
     }
 
+    @VisibleForTesting(otherwise = VisibleForTesting.NONE)
+    internal fun getCachedEntitlements() = cachedEntitlements
+
     // endregion
 // region Static
     companion object {
@@ -703,7 +707,7 @@ class Purchases @JvmOverloads internal constructor(
 
 }
 
-class PurchasesError(
+data class PurchasesError(
     val domain: Purchases.ErrorDomains,
     val code: Int,
     val message: String?

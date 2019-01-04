@@ -107,7 +107,10 @@ internal class BillingWrapper internal constructor(
     }
 
     fun makePurchaseAsync(
-        activity: Activity, appUserID: String, sku: String, oldSkus: ArrayList<String>,
+        activity: Activity,
+        appUserID: String,
+        sku: String,
+        oldSkus: ArrayList<String>,
         @BillingClient.SkuType skuType: String
     ) {
 
@@ -153,9 +156,8 @@ internal class BillingWrapper internal constructor(
         })
     }
 
-    fun consumePurchase(token: String) {
-        executeRequest(Runnable { billingClient!!.consumeAsync(token) { responseCode, purchaseToken -> } })
-    }
+    fun consumePurchase(token: String) =
+        executeRequest(Runnable { billingClient!!.consumeAsync(token) { _, _ -> } })
 
     override fun onPurchasesUpdated(responseCode: Int, purchases: List<Purchase>?) {
         if (responseCode == BillingClient.BillingResponse.OK && purchases != null) {

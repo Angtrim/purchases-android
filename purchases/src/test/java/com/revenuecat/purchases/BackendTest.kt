@@ -43,27 +43,22 @@ class BackendTest {
     private var receivedEntitlements: Map<String, Entitlement>? = null
 
 
-    private val handler = object : Backend.BackendResponseHandler() {
-
-        override fun onReceivePurchaserInfo(info: PurchaserInfo) {
+    private val onReceivePurchaserInfoSuccessHandler: (PurchaserInfo) -> Unit = { info ->
             this@BackendTest.receivedPurchaserInfo = info
         }
 
-        override fun onError(code: Int, message: String?) {
+    private val onReceivePurchaserInfoErrorHandler: (PurchasesError) -> Unit = {
             this@BackendTest.receivedCode = -1
-            this@BackendTest.receivedMessage = message
+            this@BackendTest.receivedMessage = it.message
         }
+
+    private val onReceiveEntitlementsSuccessHandler: (Map<String, Entitlement>) -> Unit = { entitlements ->
+        this@BackendTest.receivedEntitlements = entitlements
     }
 
-    private val entitlementsHandler = object : Backend.EntitlementsResponseHandler() {
-        override fun onReceiveEntitlements(entitlements: Map<String, Entitlement>) {
-            this@BackendTest.receivedEntitlements = entitlements
-        }
-
-        override fun onError(code: Int, message: String) {
-            this@BackendTest.receivedCode = code
-            this@BackendTest.receivedMessage = message
-        }
+    private val onReceiveEntitlementsErrorHandler: (PurchasesError) -> Unit = {
+        this@BackendTest.receivedCode = it.code
+        this@BackendTest.receivedMessage = it.message
     }
 
     private inner class SyncDispatcher: Dispatcher(mockk()) {
@@ -150,7 +145,7 @@ class BackendTest {
 
         val info = mockResponse("/receipts", body, responseCode, clientException, resultBody)
 
-        backend.postReceiptData(fetchToken, appUserID, productID, isRestore, handler)
+        backend.postReceiptData(fetchToken, appUserID, productID, isRestore, onReceivePurchaserInfoSuccessHandler, onReceivePurchaserInfoErrorHandler)
 
         return info
     }
@@ -164,7 +159,7 @@ class BackendTest {
         val info =
             mockResponse("/subscribers/$appUserID", null, responseCode, clientException, resultBody)
 
-        backend.getPurchaserInfo(appUserID, handler)
+        backend.getPurchaserInfo(appUserID, onReceivePurchaserInfoSuccessHandler, onReceivePurchaserInfoErrorHandler)
 
         return info
     }
@@ -239,7 +234,7 @@ class BackendTest {
 
         mockResponse("/subscribers/$appUserID/products", null, 200, null, "{'entitlements': {}}")
 
-        backend.getEntitlements(appUserID, entitlementsHandler)
+        backend.getEntitlements(appUserID, onReceiveEntitlementsSuccessHandler, onReceiveEntitlementsErrorHandler)
 
         assertNotNull(receivedEntitlements)
         assertEquals(0, receivedEntitlements!!.size)
@@ -251,7 +246,7 @@ class BackendTest {
 
         mockResponse("/subscribers/$appUserID/products", null, 200, null, "{}")
 
-        backend.getEntitlements(appUserID, entitlementsHandler)
+        backend.getEntitlements(appUserID, onReceiveEntitlementsSuccessHandler, onReceiveEntitlementsErrorHandler)
 
         assertNull(receivedEntitlements)
         assertNotNull(receivedMessage)
@@ -271,7 +266,7 @@ class BackendTest {
             mockEntitlementFactory.build(any() as JSONObject)
         } returns HashMap()
 
-        backend.getEntitlements(appUserID, entitlementsHandler)
+        backend.getEntitlements(appUserID, onReceiveEntitlementsSuccessHandler, onReceiveEntitlementsErrorHandler)
 
         verify {
             mockEntitlementFactory.build(any() as JSONObject)
@@ -373,18 +368,18 @@ class BackendTest {
             null
         )
 
-        val onSuccessHandler = mockk<() -> Unit>(relaxed = true)
+        val onSuccess= mockk<() -> Unit>(relaxed = true)
         backend.createAlias(
             appUserID,
             "newId",
-            onSuccessHandler,
-            { _, _ ->
+            onSuccess,
+            {
                 fail("Should have called success")
             }
         )
 
         verify {
-            onSuccessHandler.invoke()
+            onSuccess.invoke()
         }
     }
 

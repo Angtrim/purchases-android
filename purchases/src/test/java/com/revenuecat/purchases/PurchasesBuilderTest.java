@@ -26,27 +26,7 @@ public class PurchasesBuilderTest {
     @Mock(answer = RETURNS_DEEP_STUBS) private Application application;
     private Purchases.PurchasesListener listener = new Purchases.PurchasesListener() {
         @Override
-        public void onCompletedPurchase(String sku, PurchaserInfo purchaserInfo) {
-
-        }
-
-        @Override
-        public void onFailedPurchase(@NotNull Purchases.ErrorDomains domain, int code, @Nullable String reason) {
-
-        }
-
-        @Override
         public void onReceiveUpdatedPurchaserInfo(PurchaserInfo purchaserInfo) {
-
-        }
-
-        @Override
-        public void onRestoreTransactions(PurchaserInfo purchaserInfo) {
-
-        }
-
-        @Override
-        public void onRestoreTransactionsFailed(@NotNull Purchases.ErrorDomains domain, int code, @Nullable String reason) {
 
         }
     };

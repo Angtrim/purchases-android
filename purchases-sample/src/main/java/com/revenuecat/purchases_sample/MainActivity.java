@@ -20,6 +20,7 @@ import com.revenuecat.purchases.PurchaserInfo;
 import com.revenuecat.purchases.Purchases;
 import com.revenuecat.purchases.PurchasesError;
 import com.revenuecat.purchases.interfaces.PurchaseCompletedListener;
+import com.revenuecat.purchases.interfaces.ReceiveEntitlementsListener;
 import com.revenuecat.purchases.interfaces.ReceivePurchaserInfoListener;
 
 import java.util.ArrayList;
@@ -48,7 +49,6 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
 
     private void buildPurchases() {
         purchases = Purchases.getSharedInstance();
-        purchases.setListener(this);
         Purchases.getFrameworkVersion();
     }
 
@@ -127,7 +127,7 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
                                 }
                             });
                         } else {
-                            Log.i("Purchases", error.getMessage());
+                            Log.e("Purchases", error.getMessage());
                         }
                     }
                 });
@@ -143,23 +143,22 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
             }
         });
 
-        this.purchases.getEntitlements(new Purchases.GetEntitlementsHandler() {
+        this.purchases.getEntitlements(new ReceiveEntitlementsListener() {
             @Override
-            public void onReceiveEntitlements(Map<String, Entitlement> entitlementMap) {
-                Entitlement pro = entitlementMap.get("pro");
-                Offering monthly = pro.getOfferings().get("monthly");
+            public void onReceived(@Nullable Map<String, Entitlement> entitlementMap, @Nullable PurchasesError error) {
+                if (error == null) {
+                    Entitlement pro = entitlementMap.get("pro");
+                    Offering monthly = pro.getOfferings().get("monthly");
 
-                MainActivity.this.entitlementMap = entitlementMap;
+                    MainActivity.this.entitlementMap = entitlementMap;
 
-                monthlySkuDetails = monthly.getSkuDetails();
+                    monthlySkuDetails = monthly.getSkuDetails();
 
-                mButton.setText("Buy One Month w/ Trial - " + monthlySkuDetails.getPrice());
-                mButton.setEnabled(true);
-            }
-
-            @Override
-            public void onReceiveEntitlementsError(Purchases.ErrorDomains domain, int code, String message) {
-
+                    mButton.setText("Buy One Month w/ Trial - " + monthlySkuDetails.getPrice());
+                    mButton.setEnabled(true);
+                } else {
+                    Log.e("Purchases", error.getMessage());
+                }
             }
         });
 
@@ -190,12 +189,6 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
                 mRecyclerView.invalidate();
             }
         });
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        purchases.removeListener();
     }
 
     public static class ExpirationsAdapter extends RecyclerView.Adapter<ExpirationsAdapter.ViewHolder> {

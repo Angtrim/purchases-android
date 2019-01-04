@@ -39,7 +39,6 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
 
     private fun buildPurchases() {
         purchases = Purchases.sharedInstance
-        purchases!!.listener = this
         Purchases.frameworkVersion
     }
 
@@ -101,28 +100,27 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
             buildPurchases()
         }
 
-        this.purchases!!.getEntitlements(object : Purchases.GetEntitlementsHandler {
-            override fun onReceiveEntitlements(entitlementMap: Map<String, Entitlement>) {
-                val pro = entitlementMap["pro"]
-                val monthly = pro?.offerings?.get("monthly")
-
-                this@MainActivityKotlin.entitlementMap = entitlementMap
-
-                monthlySkuDetails = monthly?.skuDetails
-
-                mButton!!.text = "Buy One Month w/ Trial - " + monthlySkuDetails?.price
-                mButton!!.isEnabled = true
-            }
-
-            override fun onReceiveEntitlementsError(
-                domain: Purchases.ErrorDomains,
-                code: Int,
-                message: String
-            ) {
-
-            }
-        })
-
+//        this.purchases!!.getEntitlements(object : Purchases.GetEntitlementsHandler {
+//            override fun onReceiveEntitlements(entitlementMap: Map<String, Entitlement>) {
+//                val pro = entitlementMap["pro"]
+//                val monthly = pro?.offerings?.get("monthly")
+//
+//                this@MainActivityKotlin.entitlementMap = entitlementMap
+//
+//                monthlySkuDetails = monthly?.skuDetails
+//
+//                mButton!!.text = "Buy One Month w/ Trial - " + monthlySkuDetails?.price
+//                mButton!!.isEnabled = true
+//            }
+//
+//            override fun onReceiveEntitlementsError(
+//                domain: Purchases.ErrorDomains,
+//                code: Int,
+//                message: String
+//            ) {
+//
+//            }
+//        })
         val list = ArrayList<String>()
         list.add("consumable")
         this.purchases!!.getNonSubscriptionSkus(list, object : Purchases.GetSkusResponseHandler {
@@ -135,7 +133,6 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
                 mConsumableButton!!.isEnabled = true
             }
         })
-
     }
 
     override fun onReceiveUpdatedPurchaserInfo(purchaserInfo: PurchaserInfo) {
@@ -163,11 +160,6 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
 
     fun onRestoreTransactionsFailed(domain: Purchases.ErrorDomains, code: Int, reason: String) {
         Log.i("Purchases", reason)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        purchases!!.removeListener()
     }
 
     class ExpirationsAdapter(

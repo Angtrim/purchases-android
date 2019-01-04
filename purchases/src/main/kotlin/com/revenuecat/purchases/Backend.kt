@@ -17,11 +17,6 @@ internal class Backend(
 
     internal val authenticationHeaders: MutableMap<String, String>
 
-    abstract class BackendResponseHandler {
-        abstract fun onReceivePurchaserInfo(info: PurchaserInfo)
-        abstract fun onError(code: Int, message: String?)
-    }
-
     private abstract inner class PurchaserInfoReceivingCall internal constructor(
         private val onSuccessHandler: (PurchaserInfo) -> Unit,
         private val onErrorHandler: (PurchasesError) -> Unit
@@ -32,11 +27,13 @@ internal class Backend(
                 try {
                     onSuccessHandler(purchaserInfoFactory.build(result.body!!))
                 } catch (e: JSONException) {
-                    onErrorHandler(PurchasesError(
-                        Purchases.ErrorDomains.REVENUECAT_BACKEND,
-                        result.responseCode,
-                        e.message
-                    ))
+                    onErrorHandler(
+                        PurchasesError(
+                            Purchases.ErrorDomains.REVENUECAT_BACKEND,
+                            result.responseCode,
+                            e.message
+                        )
+                    )
                 }
             } else {
                 onErrorHandler(
@@ -59,7 +56,6 @@ internal class Backend(
     }
 
     init {
-
         this.authenticationHeaders = HashMap()
         this.authenticationHeaders["Authorization"] = "Bearer " + this.apiKey
     }
@@ -140,19 +136,23 @@ internal class Backend(
                         val entitlementMap = entitlementFactory.build(entitlementsResponse)
                         onSuccess(entitlementMap)
                     } catch (e: JSONException) {
-                        onError(PurchasesError(
-                            Purchases.ErrorDomains.REVENUECAT_BACKEND,
-                            result.responseCode,
-                            "Error parsing products JSON " + e.localizedMessage
-                        ))
+                        onError(
+                            PurchasesError(
+                                Purchases.ErrorDomains.REVENUECAT_BACKEND,
+                                result.responseCode,
+                                "Error parsing products JSON " + e.localizedMessage
+                            )
+                        )
                     }
 
                 } else {
-                    onError(PurchasesError(
-                        Purchases.ErrorDomains.REVENUECAT_BACKEND,
-                        result.responseCode,
-                        "Backend error"
-                    ))
+                    onError(
+                        PurchasesError(
+                            Purchases.ErrorDomains.REVENUECAT_BACKEND,
+                            result.responseCode,
+                            "Backend error"
+                        )
+                    )
                 }
             }
         })
@@ -210,7 +210,13 @@ internal class Backend(
             }
 
             override fun onError(code: Int, message: String) {
-                onErrorHandler(PurchasesError(Purchases.ErrorDomains.REVENUECAT_BACKEND, code, message))
+                onErrorHandler(
+                    PurchasesError(
+                        Purchases.ErrorDomains.REVENUECAT_BACKEND,
+                        code,
+                        message
+                    )
+                )
             }
 
             override fun onCompletion(result: HTTPClient.Result) {
@@ -218,18 +224,22 @@ internal class Backend(
                     try {
                         onSuccessHandler()
                     } catch (e: JSONException) {
-                        onErrorHandler(PurchasesError(
+                        onErrorHandler(
+                            PurchasesError(
+                                Purchases.ErrorDomains.REVENUECAT_BACKEND,
+                                result.responseCode,
+                                "Backend error"
+                            )
+                        )
+                    }
+                } else {
+                    onErrorHandler(
+                        PurchasesError(
                             Purchases.ErrorDomains.REVENUECAT_BACKEND,
                             result.responseCode,
                             "Backend error"
-                        ))
-                    }
-                } else {
-                    onErrorHandler(PurchasesError(
-                        Purchases.ErrorDomains.REVENUECAT_BACKEND,
-                        result.responseCode,
-                        "Backend error"
-                    ))
+                        )
+                    )
                 }
             }
         })
