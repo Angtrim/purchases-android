@@ -240,7 +240,6 @@ class Purchases @JvmOverloads internal constructor(
         completion: ReceivePurchaserInfoListener? = null
     ) {
         clearCaches()
-        deviceCache.clearCachedAppUserID()
         this.appUserID = appUserID
         purchaseCallbacks.clear()
         updateCaches(completion)
@@ -362,6 +361,7 @@ class Purchases @JvmOverloads internal constructor(
 
     private fun clearCaches() {
         deviceCache.clearCachedPurchaserInfo(appUserID)
+        deviceCache.clearCachedAppUserID()
         cachesLastUpdated = null
         cachedEntitlements = null
     }
