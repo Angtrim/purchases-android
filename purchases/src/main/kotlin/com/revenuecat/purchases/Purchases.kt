@@ -52,8 +52,7 @@ class Purchases @JvmOverloads internal constructor(
     private val billingWrapper: BillingWrapper,
     private val deviceCache: DeviceCache,
     var allowSharingPlayStoreAccount: Boolean = false,
-    private var cachesLastUpdated: Date? = null,
-    private var cachedEntitlements: Map<String, Entitlement>? = null
+    private var cachesLastUpdated: Date? = null
 ) : BillingWrapper.PurchasesUpdatedListener {
 
     /**
@@ -64,6 +63,11 @@ class Purchases @JvmOverloads internal constructor(
     private var purchaseCallbacks: MutableMap<String, PurchaseCompletedListener> = mutableMapOf()
     private var lastSentPurchaserInfo: PurchaserInfo? = null
     private var updatedPurchaserInfoListener: UpdatedPurchaserInfoListener? = null
+    internal var cachedEntitlements: Map<String, Entitlement>? = null
+        @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+        set(value) { field = value }
+        @VisibleForTesting(otherwise = VisibleForTesting.NONE)
+        get() = field
 
     init {
         if (_appUserID != null) {
@@ -517,7 +521,8 @@ class Purchases @JvmOverloads internal constructor(
             get() =
                 _sharedInstance
                     ?: throw UninitializedPropertyAccessException("Make sure you call Purchases.configure before")
-            private set(value) {
+            @VisibleForTesting(otherwise = VisibleForTesting.NONE)
+            internal set(value) {
                 _sharedInstance?.close()
                 _sharedInstance = value
             }
@@ -585,9 +590,6 @@ class Purchases @JvmOverloads internal constructor(
     }
     // endregion
 
-    // region Testing
-    @VisibleForTesting(otherwise = VisibleForTesting.NONE)
-    internal fun getCachedEntitlements() = cachedEntitlements
     // endregion
 }
 
