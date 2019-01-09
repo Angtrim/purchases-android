@@ -71,9 +71,8 @@ class Purchases @JvmOverloads internal constructor(
 
     init {
         if (_appUserID != null) {
-            this.appUserID = _appUserID.also {
-                identify(it)
-            }
+            this.appUserID = _appUserID
+            identify(this.appUserID)
         } else {
             this.appUserID = getAnonymousID().also {
                 allowSharingPlayStoreAccount = true
