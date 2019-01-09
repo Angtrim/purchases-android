@@ -541,93 +541,6 @@ class Purchases @JvmOverloads internal constructor(
 // endregion
 // region Builder
 
-    /**
-     * Used to construct a Purchases object
-     * @param context Application context that will be used to communicate with Google
-     * @param apiKey RevenueCat apiKey. Make sure you follow the [quickstart](https://docs.revenuecat.com/docs/getting-started-1)
-     * guide to setup your RevenueCat account.
-     */
-    class Builder(
-        private val context: Context,
-        private val apiKey: String
-    ) {
-        private val application: Application
-            get() = context.applicationContext as Application
-
-        private var appUserID: String? = null
-
-        private var service: ExecutorService? = null
-
-        init {
-            if (!hasPermission(context, Manifest.permission.INTERNET))
-                throw IllegalArgumentException("Purchases requires INTERNET permission.")
-
-            if (apiKey.isBlank())
-                throw IllegalArgumentException("API key must be set. Get this from the RevenueCat web app")
-
-            if (context.applicationContext !is Application)
-                throw IllegalArgumentException("Needs an application context.")
-        }
-
-        /**
-         * Used to set a user identifier. Check out this [guide](https://docs.revenuecat.com/docs/user-ids)
-         */
-        fun appUserID(appUserID: String) = apply { this.appUserID = appUserID }
-
-        /**
-         * Used to set a network executor service for this Purchases instance
-         */
-        fun networkExecutorService(service: ExecutorService) = apply { this.service = service }
-
-        /**
-         * Used to build the Purchases instance
-         * @return A Purchases instance. Make sure you set it as the [sharedInstance] if you
-         * want to reuse it.
-         */
-        fun build(): Purchases {
-
-            val service = this.service ?: createDefaultExecutor()
-
-            val backend = Backend(
-                this.apiKey,
-                Dispatcher(service),
-                HTTPClient(),
-                PurchaserInfo.Factory,
-                Entitlement.Factory
-            )
-
-            val billingWrapper = BillingWrapper(
-                BillingWrapper.ClientFactory(application.applicationContext),
-                Handler(application.mainLooper)
-            )
-
-            val prefs = PreferenceManager.getDefaultSharedPreferences(this.application)
-            val cache = DeviceCache(prefs, apiKey)
-
-            return Purchases(
-                application,
-                appUserID,
-                backend,
-                billingWrapper,
-                cache
-            )
-        }
-
-        private fun hasPermission(context: Context, permission: String): Boolean {
-            return context.checkCallingOrSelfPermission(permission) == PERMISSION_GRANTED
-        }
-
-        private fun createDefaultExecutor(): ExecutorService {
-            return ThreadPoolExecutor(
-                1,
-                2,
-                0,
-                TimeUnit.MILLISECONDS,
-                LinkedBlockingQueue()
-            )
-        }
-
-    }
 
     @VisibleForTesting(otherwise = VisibleForTesting.NONE)
     internal fun getCachedEntitlements() = cachedEntitlements
@@ -650,6 +563,61 @@ class Purchases @JvmOverloads internal constructor(
          */
         @JvmStatic
         val frameworkVersion = "1.5.0-SNAPSHOT"
+
+        private fun hasPermission(context: Context, permission: String): Boolean {
+            return context.checkCallingOrSelfPermission(permission) == PERMISSION_GRANTED
+        }
+
+        private fun createDefaultExecutor(): ExecutorService {
+            return ThreadPoolExecutor(
+                1,
+                2,
+                0,
+                TimeUnit.MILLISECONDS,
+                LinkedBlockingQueue()
+            )
+        }
+
+        fun configure(
+            context: Context,
+            apiKey: String,
+            appUserID: String? = null,
+            service: ExecutorService = createDefaultExecutor()
+        ) : Purchases {
+            if (!hasPermission(context, Manifest.permission.INTERNET))
+                throw IllegalArgumentException("Purchases requires INTERNET permission.")
+
+            if (apiKey.isBlank())
+                throw IllegalArgumentException("API key must be set. Get this from the RevenueCat web app")
+
+            if (context.applicationContext !is Application)
+                throw IllegalArgumentException("Needs an application context.")
+
+            val backend = Backend(
+                apiKey,
+                Dispatcher(service),
+                HTTPClient(),
+                PurchaserInfo.Factory,
+                Entitlement.Factory
+            )
+
+            val billingWrapper = BillingWrapper(
+                BillingWrapper.ClientFactory((context.applicationContext as Application).applicationContext),
+                Handler((context.applicationContext as Application).mainLooper)
+            )
+
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context.applicationContext as Application)
+            val cache = DeviceCache(prefs, apiKey)
+
+            return Purchases(
+                context.applicationContext as Application,
+                appUserID,
+                backend,
+                billingWrapper,
+                cache
+            )
+        }
+
     }
 
     /**
@@ -687,7 +655,11 @@ class Purchases @JvmOverloads internal constructor(
         /**
          * [http://branch.io/]
          */
-        BRANCH(3)
+        BRANCH(3),
+        /**
+         * [http://tenjin.io/]
+         */
+        TENJIN(4)
     }
 // endregion
 // region Interfaces
