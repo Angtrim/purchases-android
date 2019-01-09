@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.os.Handler
 import android.support.annotation.VisibleForTesting
+import android.support.annotation.VisibleForTesting.NONE
 import android.util.Log
 
 import com.android.billingclient.api.BillingClient
@@ -24,9 +25,7 @@ internal class BillingWrapper internal constructor(
     private val mainHandler: Handler
 ) : PurchasesUpdatedListener, BillingClientStateListener {
 
-    @VisibleForTesting
     internal var billingClient: BillingClient? = null
-    @VisibleForTesting
     internal var purchasesUpdatedListener: PurchasesUpdatedListener? = null
 
     private var clientConnected: Boolean = false

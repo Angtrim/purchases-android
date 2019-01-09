@@ -33,18 +33,20 @@ internal class DeviceCache(
             ).apply()
     }
 
+    fun clearCachedPurchaserInfo(appUserID: String) {
+        preferences.edit()
+            .remove(purchaserInfoCacheKey(appUserID))
+            .apply()
+    }
+
     fun getCachedAppUserID(): String? = preferences.getString(appUserIDCacheKey, null)
 
-    fun cacheAppUserID(appUserID: String?) {
-        if (appUserID == null) {
-            clearCachedAppUserID()
-        } else {
-            preferences.edit()
-                .putString(
-                    appUserIDCacheKey,
-                    appUserID
-                ).apply()
-        }
+    fun cacheAppUserID(appUserID: String) {
+        preferences.edit()
+            .putString(
+                appUserIDCacheKey,
+                appUserID
+            ).apply()
     }
 
     fun clearCachedAppUserID() {

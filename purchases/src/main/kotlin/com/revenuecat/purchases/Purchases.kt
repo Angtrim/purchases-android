@@ -19,7 +19,6 @@ import org.json.JSONObject
 import java.util.ArrayList
 import java.util.Date
 import java.util.HashMap
-import java.util.HashSet
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.LinkedBlockingQueue
@@ -51,7 +50,6 @@ class Purchases @JvmOverloads internal constructor(
     private val billingWrapper: BillingWrapper,
     private val deviceCache: DeviceCache,
     var allowSharingPlayStoreAccount: Boolean = false,
-    internal val postedTokens: HashSet<String> = HashSet(),
     private var cachesLastUpdated: Date? = null,
     private var cachedEntitlements: Map<String, Entitlement>? = null
 ) : BillingWrapper.PurchasesUpdatedListener, Application.ActivityLifecycleCallbacks {
@@ -120,10 +118,14 @@ class Purchases @JvmOverloads internal constructor(
     fun getEntitlements(handler: ReceiveEntitlementsListener? = null) {
         this.cachedEntitlements?.let {
             handler?.onReceived(it, null)
+            if (!isCacheStale()) {
+                updateCaches()
+            }
         } ?: fetchAndCacheEntitlements(handler)
     }
 
     private fun fetchAndCacheEntitlements(handler: ReceiveEntitlementsListener? = null) {
+        // TODO: should we update cachesLastChecked here?
         backend.getEntitlements(
             appUserID,
             { entitlements ->
@@ -185,8 +187,8 @@ class Purchases @JvmOverloads internal constructor(
             )
         } else {
             purchaseCallbacks[sku] = completion
+            billingWrapper.makePurchaseAsync(activity, appUserID, sku, oldSkus, skuType)
         }
-        billingWrapper.makePurchaseAsync(activity, appUserID, sku, oldSkus, skuType)
     }
 
     /**
@@ -210,16 +212,7 @@ class Purchases @JvmOverloads internal constructor(
                         if (allPurchases.isEmpty()) {
                             getPurchaserInfo(completion)
                         } else {
-                            postPurchases(
-                                allPurchases,
-                                true,
-                                { _, info ->
-                                    completion.onReceived(info, null)
-                                },
-                                { _, error ->
-                                    completion.onReceived(null, error)
-                                }
-                            )
+                            postRestoredPurchases(allPurchases, completion)
                         }
                     },
                     { error -> completion.onReceived(null, error) })
@@ -259,22 +252,21 @@ class Purchases @JvmOverloads internal constructor(
         appUserID: String,
         completion: ReceivePurchaserInfoListener? = null
     ) {
+        clearCaches()
         deviceCache.clearCachedAppUserID()
         this.appUserID = appUserID
-        postedTokens.clear()
         purchaseCallbacks.clear()
-        makeCachesOutdatedAndNotifyIfNeeded(completion)
+        updateCaches(completion)
     }
 
     /**
      * Resets the Purchases client clearing the save appUserID. This will generate a random user id and save it in the cache.
      */
     fun reset() {
+        clearCaches()
         this.appUserID = createRandomIDAndCacheIt()
-        allowSharingPlayStoreAccount = true
-        postedTokens.clear()
         purchaseCallbacks.clear()
-        makeCachesOutdatedAndNotifyIfNeeded()
+        updateCaches()
     }
 
     /**
@@ -290,8 +282,13 @@ class Purchases @JvmOverloads internal constructor(
     fun getPurchaserInfo(
         completion: ReceivePurchaserInfoListener
     ) {
-        if (cachesAreValid()) {
-            completion.onReceived(deviceCache.getCachedPurchaserInfo(appUserID), null)
+        val cachedPurchaserInfo = deviceCache.getCachedPurchaserInfo(appUserID)
+        if (cachedPurchaserInfo != null) {
+            completion.onReceived(cachedPurchaserInfo, null)
+            if (!isCacheStale()) {
+                // TODO: this should call the delegate
+                updateCaches()
+            }
         } else {
             updateCaches(completion)
         }
@@ -344,21 +341,23 @@ class Purchases @JvmOverloads internal constructor(
             },
             { error ->
                 Log.e("Purchases", "Error fetching subscriber data: ${error.message}")
-                invalidateCaches()
+                clearCaches()
                 completion?.onReceived(null, error)
             })
     }
 
-    private fun cachesAreValid() =
-        cachesLastUpdated != null && Date().time - cachesLastUpdated!!.time < 60000
+    private fun isCacheStale() =
+        !(cachesLastUpdated != null && Date().time - cachesLastUpdated!!.time < 60000 * 5)
 
-    private fun invalidateCaches() {
+    private fun clearCaches() {
+        deviceCache.clearCachedPurchaserInfo(appUserID)
         cachesLastUpdated = null
+        cachedEntitlements = null
     }
 
     private fun cachePurchaserInfo(info: PurchaserInfo) {
-        cachesLastUpdated = Date()
         deviceCache.cachePurchaserInfo(appUserID, info)
+        cachesLastUpdated = Date()
     }
 
     private fun postPurchases(
@@ -367,29 +366,44 @@ class Purchases @JvmOverloads internal constructor(
         onSuccess: (Purchase, PurchaserInfo) -> Unit,
         onError: (Purchase, PurchasesError) -> Unit
     ) {
-        purchases.distinctBy { it.purchaseToken }.filter { !postedTokens.contains(it.purchaseToken) }
-            .forEach { purchase ->
-                postedTokens.add(purchase.purchaseToken)
-                backend.postReceiptData(
-                    purchase.purchaseToken,
-                    appUserID,
-                    purchase.sku,
-                    allowSharingPlayStoreAccount,
-                    { info ->
+        purchases.forEach { purchase ->
+            backend.postReceiptData(
+                purchase.purchaseToken,
+                appUserID,
+                purchase.sku,
+                allowSharingPlayStoreAccount,
+                { info ->
+                    billingWrapper.consumePurchase(purchase.purchaseToken)
+                    deviceCache.cachePurchaserInfo(appUserID, info)
+                    onSuccess(purchase, info)
+                }, { error ->
+                    if (error.code < 500) {
                         billingWrapper.consumePurchase(purchase.purchaseToken)
-                        deviceCache.cachePurchaserInfo(appUserID, info)
-                        onSuccess(purchase, info)
-                    }, { error ->
-                        if (error.code < 500) {
-                            billingWrapper.consumePurchase(purchase.purchaseToken)
-                            postedTokens.remove(purchase.purchaseToken)
-                        }
-                        onError(
-                            purchase,
-                            error
-                        )
-                    })
-            }
+                    }
+                    onError(purchase, error)
+                })
+        }
+    }
+
+    private fun postRestoredPurchases(
+        purchases: List<Purchase>,
+        onCompletion: ReceivePurchaserInfoListener
+    ) {
+        purchases.sortedBy { it.purchaseTime }.let { sortedByTime ->
+            postPurchases(
+                sortedByTime,
+                true,
+                { purchase, info ->
+                    if (sortedByTime.last() == purchase) {
+                        onCompletion.onReceived(info, null)
+                    }
+                },
+                { purchase, error ->
+                    if (sortedByTime.last() == purchase) {
+                        onCompletion.onReceived(null, error)
+                    }
+                })
+        }
     }
 
     private fun getAnonymousID(): String {
@@ -434,19 +448,13 @@ class Purchases @JvmOverloads internal constructor(
         }
     }
 
-    private fun makeCachesOutdatedAndNotifyIfNeeded(
-        completion: ReceivePurchaserInfoListener? = null
-    ) {
-        invalidateCaches()
-        updateCaches(completion)
-    }
-
 // endregion
 // region Overriden methods
     /**
      * @suppress
      */
     override fun onPurchasesUpdated(purchases: List<@JvmSuppressWildcards Purchase>) {
+        // TODO: if there's no purchaseCallbacks call the delegate
         postPurchases(
             purchases,
             allowSharingPlayStoreAccount,
