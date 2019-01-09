@@ -27,7 +27,7 @@ internal class Backend(
     ) : Dispatcher.AsyncCall() {
 
         override fun onCompletion(result: HTTPClient.Result) {
-            callbacks.remove(cacheKey)!!.forEach { (onSuccess, onError) ->
+            callbacks.remove(cacheKey)?.forEach { (onSuccess, onError) ->
                 if (result.responseCode < 300) {
                     try {
                         onSuccess(purchaserInfoFactory.build(result.body!!))
@@ -57,7 +57,7 @@ internal class Backend(
         }
 
         override fun onError(code: Int, message: String) {
-            callbacks.remove(cacheKey)!!.forEach { (_, onError) ->
+            callbacks.remove(cacheKey)?.forEach { (_, onError) ->
                 onError(PurchasesError(Purchases.ErrorDomains.REVENUECAT_BACKEND, code, message))
             }
         }
@@ -86,6 +86,7 @@ internal class Backend(
         val path = "/subscribers/" + encode(appUserID)
         val cacheKey = listOf(path)
         if (!callbacks.containsKey(cacheKey)) {
+            callbacks[cacheKey] = mutableListOf(onSuccess to onError)
             enqueue(object : PurchaserInfoReceivingCall(cacheKey) {
                 @Throws(HTTPClient.HTTPErrorException::class)
                 override fun call(): HTTPClient.Result {
@@ -96,9 +97,9 @@ internal class Backend(
                     )
                 }
             })
+        } else {
+            callbacks[cacheKey]!!.add(onSuccess to onError)
         }
-
-        callbacks.getOrPut(cacheKey) { mutableListOf() }.add(onSuccess to onError)
     }
 
     fun postReceiptData(
@@ -111,6 +112,8 @@ internal class Backend(
     ) {
         val cacheKey = listOf(purchaseToken, productID, appUserID, isRestore.toString())
         if (!callbacks.containsKey(cacheKey)) {
+            callbacks[cacheKey] = mutableListOf(onSuccess to onError)
+
             val body = HashMap<String, Any?>()
 
             body["fetch_token"] = purchaseToken
@@ -124,10 +127,9 @@ internal class Backend(
                     return httpClient.performRequest("/receipts", body, authenticationHeaders)
                 }
             })
+        } else {
+            callbacks[cacheKey]!!.add(onSuccess to onError)
         }
-
-        callbacks.getOrPut(cacheKey) { mutableListOf() }.add(onSuccess to onError)
-
     }
 
     fun getEntitlements(
@@ -139,6 +141,8 @@ internal class Backend(
         val cacheKey = listOf(path)
 
         if (!entitlementsCallbacks.containsKey(cacheKey)) {
+            entitlementsCallbacks[cacheKey] = mutableListOf(onSuccess to onError)
+
             enqueue(object : Dispatcher.AsyncCall() {
                 @Throws(HTTPClient.HTTPErrorException::class)
                 override fun call(): HTTPClient.Result {
@@ -191,9 +195,9 @@ internal class Backend(
                     }
                 }
             })
+        } else {
+            entitlementsCallbacks[cacheKey]!!.add(onSuccess to onError)
         }
-
-        entitlementsCallbacks.getOrPut(cacheKey) { mutableListOf() }.add(onSuccess to onError)
     }
 
     private fun encode(string: String): String {
