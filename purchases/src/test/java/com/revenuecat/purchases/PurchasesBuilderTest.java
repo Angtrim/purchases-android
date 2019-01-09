@@ -3,14 +3,11 @@ package com.revenuecat.purchases;
 import android.app.Application;
 import android.support.test.runner.AndroidJUnit4;
 
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 
 import static android.support.test.InstrumentationRegistry.getInstrumentation;
@@ -24,9 +21,9 @@ import static org.mockito.Mockito.when;
 public class PurchasesBuilderTest {
 
     @Mock(answer = RETURNS_DEEP_STUBS) private Application application;
-    private Purchases.PurchasesListener listener = new Purchases.PurchasesListener() {
+    private Purchases.PurchaserInfoListener listener = new Purchases.PurchaserInfoListener() {
         @Override
-        public void onReceiveUpdatedPurchaserInfo(PurchaserInfo purchaserInfo) {
+        public void didReceiveUpdatedPurchaserInfo(PurchaserInfo purchaserInfo) {
 
         }
     };

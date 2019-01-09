@@ -15,6 +15,7 @@ import android.widget.TextView;
 
 import com.android.billingclient.api.SkuDetails;
 import com.revenuecat.purchases.Entitlement;
+import com.revenuecat.purchases.ErrorDomains;
 import com.revenuecat.purchases.Offering;
 import com.revenuecat.purchases.PurchaserInfo;
 import com.revenuecat.purchases.Purchases;
@@ -29,9 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class MainActivity extends AppCompatActivity implements Purchases.PurchasesListener {
+public class MainActivity extends AppCompatActivity implements Purchases.PurchaserInfoListener {
 
-    private Purchases purchases;
     private SkuDetails monthlySkuDetails;
     private SkuDetails consumableSkuDetails = null;
     private Button mButton;
@@ -47,11 +47,6 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
         return useAlternateID ? "cesar5" : "random1";
     }
 
-    private void buildPurchases() {
-        purchases = Purchases.getSharedInstance();
-        Purchases.getFrameworkVersion();
-    }
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -62,13 +57,11 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
         mLayoutManager = new LinearLayoutManager(this);
         mRecyclerView.setLayoutManager(mLayoutManager);
 
-        buildPurchases();
-
         mButton = findViewById(R.id.button);
         mButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                purchases.makePurchase(
+                Purchases.getSharedInstance().makePurchase(
                         MainActivity.this,
                         monthlySkuDetails.getSku(),
                         monthlySkuDetails.getType(),
@@ -77,12 +70,13 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
                             public void onCompleted(@Nullable String sku, @Nullable PurchaserInfo purchaserInfo, @Nullable PurchasesError error) {
                                 if (error == null) {
                                     Log.i("Purchases", "Purchase completed: " + purchaserInfo);
-                                    onReceiveUpdatedPurchaserInfo(purchaserInfo);
+                                    didReceiveUpdatedPurchaserInfo(purchaserInfo);
                                 } else {
-                                    purchases.setAllowSharingPlayStoreAccount(true);
+                                    Purchases.getSharedInstance().setAllowSharingPlayStoreAccount(true);
                                 }
                             }
-                        });
+                        }
+                );
             }
         });
         mButton.setEnabled(false);
@@ -91,7 +85,7 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
         mConsumableButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                purchases.makePurchase(
+                Purchases.getSharedInstance().makePurchase(
                         MainActivity.this,
                         consumableSkuDetails.getSku(),
                         consumableSkuDetails.getType(),
@@ -100,9 +94,9 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
                             public void onCompleted(@Nullable String sku, @Nullable PurchaserInfo purchaserInfo, @Nullable PurchasesError error) {
                                 if (error == null) {
                                     Log.i("Purchases", "Purchase completed: " + purchaserInfo);
-                                    onReceiveUpdatedPurchaserInfo(purchaserInfo);
+                                    didReceiveUpdatedPurchaserInfo(purchaserInfo);
                                 } else {
-                                    purchases.setAllowSharingPlayStoreAccount(true);
+                                    Purchases.getSharedInstance().setAllowSharingPlayStoreAccount(true);
                                 }
                             }
                         });
@@ -114,7 +108,7 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
         restoreButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                purchases.restorePurchases(new ReceivePurchaserInfoListener() {
+                Purchases.getSharedInstance().restorePurchases(new ReceivePurchaserInfoListener() {
                     @Override
                     public void onReceived(@Nullable final PurchaserInfo purchaserInfo, @Nullable PurchasesError error) {
                         if (error == null) {
@@ -139,7 +133,6 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
             @Override
             public void onClick(View view) {
                 useAlternateID = !useAlternateID;
-                buildPurchases();
             }
         });
 
@@ -179,7 +172,7 @@ public class MainActivity extends AppCompatActivity implements Purchases.Purchas
     }
 
     @Override
-    public void onReceiveUpdatedPurchaserInfo(final PurchaserInfo purchaserInfo) {
+    public void didReceiveUpdatedPurchaserInfo(final PurchaserInfo purchaserInfo) {
         Log.i("Purchases", "Got new purchaser info: " + purchaserInfo.getActiveSubscriptions());
         Log.i("Purchases", "Consumable: " + purchaserInfo.getAllPurchasedSkus());
         this.runOnUiThread(new Runnable() {

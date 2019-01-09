@@ -20,7 +20,7 @@ import com.revenuecat.purchases.interfaces.ReceivePurchaserInfoListener
 import java.util.ArrayList
 import java.util.Date
 
-class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
+class MainActivityKotlin : AppCompatActivity(), Purchases.PurchaserInfoListener {
 
     private var purchases: Purchases? = null
     private var monthlySkuDetails: SkuDetails? = null
@@ -62,7 +62,7 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
                 completion = PurchaseCompletedListener { sku, purchaserInfo, error ->
                     if (error == null) {
                         Log.i("Purchases", "Purchase completed: $purchaserInfo")
-                        onReceiveUpdatedPurchaserInfo(purchaserInfo!!)
+                        didReceiveUpdatedPurchaserInfo(purchaserInfo!!)
                     } else {
                         purchases!!.allowSharingPlayStoreAccount = true
                     }
@@ -79,7 +79,7 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
                 completion = PurchaseCompletedListener { _, purchaserInfo, error ->
                     if (error == null) {
                         Log.i("Purchases", "Purchase completed: $purchaserInfo")
-                        onReceiveUpdatedPurchaserInfo(purchaserInfo!!)
+                        didReceiveUpdatedPurchaserInfo(purchaserInfo!!)
                     } else {
                         purchases!!.allowSharingPlayStoreAccount = true
                     }
@@ -135,7 +135,7 @@ class MainActivityKotlin : AppCompatActivity(), Purchases.PurchasesListener {
         })
     }
 
-    override fun onReceiveUpdatedPurchaserInfo(purchaserInfo: PurchaserInfo) {
+    override fun didReceiveUpdatedPurchaserInfo(purchaserInfo: PurchaserInfo) {
         Log.i("Purchases", "Got new purchaser info: " + purchaserInfo.activeSubscriptions)
         Log.i("Purchases", "Consumable: " + purchaserInfo.allPurchasedSkus)
         this.runOnUiThread {

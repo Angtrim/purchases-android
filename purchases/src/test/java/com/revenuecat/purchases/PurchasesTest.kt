@@ -33,7 +33,7 @@ class PurchasesTest {
     private val mockBillingWrapper: BillingWrapper = mockk()
     private val mockBackend: Backend = mockk()
     private val mockCache: DeviceCache = mockk()
-    private val listener: Purchases.PurchasesListener = mockk()
+    private val listener: Purchases.PurchaserInfoListener = mockk()
 
     private var capturedActivityLifecycleCallbacks = slot<Application.ActivityLifecycleCallbacks>()
     private var capturedPurchasesUpdatedListener = slot<BillingWrapper.PurchasesUpdatedListener>()
@@ -273,7 +273,7 @@ class PurchasesTest {
             mockBackend.getPurchaserInfo(eq(appUserId), any(), any())
         }
         verify(exactly = 2) {
-            listener.onReceiveUpdatedPurchaserInfo(any())
+            listener.didReceiveUpdatedPurchaserInfo(any())
         }
     }
 
@@ -706,7 +706,7 @@ class PurchasesTest {
         setup()
 
         verify {
-            listener.onReceiveUpdatedPurchaserInfo(any())
+            listener.didReceiveUpdatedPurchaserInfo(any())
         }
     }
 
@@ -716,7 +716,7 @@ class PurchasesTest {
         purchases.onActivityPaused(mockk())
         purchases.onActivityResumed(mockk())
         verify(exactly = 2) {
-            listener.onReceiveUpdatedPurchaserInfo(any())
+            listener.didReceiveUpdatedPurchaserInfo(any())
         }
     }
 
@@ -1208,7 +1208,7 @@ class PurchasesTest {
         setup()
         purchases.onActivityResumed(mockk())
         verify {
-            listener.onReceiveUpdatedPurchaserInfo(any())
+            listener.didReceiveUpdatedPurchaserInfo(any())
         }
     }
 
@@ -1224,7 +1224,7 @@ class PurchasesTest {
     fun `when setting listener, caches are retrieved`() {
         setup()
         verify {
-            listener.onReceiveUpdatedPurchaserInfo(any())
+            listener.didReceiveUpdatedPurchaserInfo(any())
         }
     }
 

@@ -9,7 +9,7 @@ class MainApplication: Application() {
 
     override fun onCreate() {
         super.onCreate()
-        Purchases.sharedInstance = Purchases.Builder(this, PURCHASES_KEY).build()
+        Purchases.configure(this, PURCHASES_KEY)
     }
 
 }
