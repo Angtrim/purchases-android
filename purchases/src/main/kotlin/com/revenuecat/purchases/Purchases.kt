@@ -279,7 +279,7 @@ class Purchases @JvmOverloads internal constructor(
         }
     }
 
-    fun addUpdatedPurchaserInfoListener(listener: UpdatedPurchaserInfoListener?) {
+    fun setUpdatedPurchaserInfoListener(listener: UpdatedPurchaserInfoListener?) {
         this.updatedPurchaserInfoListener = listener
     }
 
