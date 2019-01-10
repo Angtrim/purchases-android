@@ -29,13 +29,11 @@ import org.json.JSONObject
 @Config(manifest = Config.NONE)
 class PurchasesTest {
 
-    private val mockApplication: Application = mockk()
     private val mockBillingWrapper: BillingWrapper = mockk()
     private val mockBackend: Backend = mockk()
     private val mockCache: DeviceCache = mockk()
     private val listener: Purchases.PurchaserInfoListener = mockk()
 
-    private var capturedActivityLifecycleCallbacks = slot<Application.ActivityLifecycleCallbacks>()
     private var capturedPurchasesUpdatedListener = slot<BillingWrapper.PurchasesUpdatedListener>()
 
     private val appUserId = "fakeUserID"
@@ -47,12 +45,10 @@ class PurchasesTest {
         val mockInfo = mockk<PurchaserInfo>()
 
         mockCache(mockInfo)
-        mockApplication()
         mockBackend(mockInfo)
         mockBillingWrapper()
 
         purchases = Purchases(
-            mockApplication,
             appUserId,
             mockBackend,
             mockBillingWrapper,
@@ -77,10 +73,8 @@ class PurchasesTest {
 
         mockSkuDetailFetch(skuDetails, skus, BillingClient.SkuType.SUBS)
 
-        purchases.getSubscriptionSkus(skus, object : Purchases.GetSkusResponseHandler {
-            override fun onReceiveSkus(skus: List<SkuDetails>) {
-                this@PurchasesTest.receivedSkus = skus
-            }
+        purchases.getSubscriptionSkus(skus, GetSkusResponseHandler { skuDetails ->
+            this@PurchasesTest.receivedSkus = skuDetails
         })
 
         assertSame(receivedSkus, skuDetails)
@@ -97,10 +91,8 @@ class PurchasesTest {
 
         mockSkuDetailFetch(skuDetails, skus, BillingClient.SkuType.INAPP)
 
-        purchases.getNonSubscriptionSkus(skus, object : Purchases.GetSkusResponseHandler {
-            override fun onReceiveSkus(skus: List<SkuDetails>) {
-                this@PurchasesTest.receivedSkus = skus
-            }
+        purchases.getNonSubscriptionSkus(skus, GetSkusResponseHandler { skuDetails ->
+            this@PurchasesTest.receivedSkus = skuDetails
         })
 
         assertSame(receivedSkus, skuDetails)
@@ -244,40 +236,6 @@ class PurchasesTest {
     }
 
     @Test
-    fun addsAnApplicationLifecycleListener() {
-        setup()
-
-        verify {
-            mockApplication.registerActivityLifecycleCallbacks(any())
-        }
-    }
-
-    @Test
-    fun closingUnregistersLifecycleListener() {
-        setup()
-        mockCloseActions()
-        purchases.close()
-
-        verify {
-            mockApplication.unregisterActivityLifecycleCallbacks(any())
-        }
-    }
-
-    @Test
-    fun onResumeGetsSubscriberInfo() {
-        setup()
-        capturedActivityLifecycleCallbacks.captured.onActivityPaused(mockk())
-        capturedActivityLifecycleCallbacks.captured.onActivityResumed(mockk())
-
-        verify {
-            mockBackend.getPurchaserInfo(eq(appUserId), any(), any())
-        }
-        verify(exactly = 2) {
-            listener.didReceiveUpdatedPurchaserInfo(any())
-        }
-    }
-
-    @Test
     fun getsSubscriberInfoOnCreated() {
         setup()
 
@@ -291,12 +249,10 @@ class PurchasesTest {
         val mockInfo = mockk<PurchaserInfo>()
 
         mockCache(mockInfo)
-        mockApplication()
         mockBackend(mockInfo)
         mockBillingWrapper()
 
         val purchases = Purchases(
-            mockApplication,
             null,
             mockBackend,
             mockBillingWrapper,
@@ -315,12 +271,10 @@ class PurchasesTest {
         val mockInfo = mockk<PurchaserInfo>()
 
         mockCache(mockInfo)
-        mockApplication()
         mockBackend(mockInfo)
         mockBillingWrapper()
 
         Purchases(
-            mockApplication,
             null,
             mockBackend,
             mockBillingWrapper,
@@ -341,7 +295,6 @@ class PurchasesTest {
             mockCache.getCachedAppUserID()
         } returns appUserID
         val p = Purchases(
-            mockApplication,
             null,
             mockBackend,
             mockBillingWrapper,
@@ -356,7 +309,6 @@ class PurchasesTest {
         setup()
 
         val purchases = Purchases(
-            mockApplication,
             null,
             mockBackend,
             mockBillingWrapper,
@@ -397,7 +349,6 @@ class PurchasesTest {
         setup()
 
         val purchases = Purchases(
-            mockApplication,
             "a_fixed_id",
             mockBackend,
             mockBillingWrapper,
@@ -438,7 +389,6 @@ class PurchasesTest {
         setup()
 
         val purchases = Purchases(
-            mockApplication,
             "a_fixed_id",
             mockBackend,
             mockBillingWrapper,
@@ -711,16 +661,6 @@ class PurchasesTest {
     }
 
     @Test
-    fun cachedUserInfoEmitOnResumeActive() {
-        setup()
-        purchases.onActivityPaused(mockk())
-        purchases.onActivityResumed(mockk())
-        verify(exactly = 2) {
-            listener.didReceiveUpdatedPurchaserInfo(any())
-        }
-    }
-
-    @Test
     fun receivedPurchaserInfoShouldBeCached() {
         setup()
 
@@ -848,7 +788,7 @@ class PurchasesTest {
         })
 
         assertThat(receivedEntitlementMap).isNotNull
-        assertThat(purchases.getCachedEntitlements()).isEqualTo(receivedEntitlementMap)
+        assertThat(purchases.cachedEntitlements).isEqualTo(receivedEntitlementMap)
     }
 
     @Test
@@ -1032,7 +972,6 @@ class PurchasesTest {
             mockBillingWrapper.setListener(purchases)
             mockBillingWrapper.setListener(null)
         }
-        verify { mockApplication.unregisterActivityLifecycleCallbacks(eq(capturedActivityLifecycleCallbacks.captured)) }
     }
 
     @Test
@@ -1184,7 +1123,6 @@ class PurchasesTest {
         verify {
             mockCache.cacheAppUserID(capture(randomID))
         }
-        assertThat(purchases.allowSharingPlayStoreAccount).isEqualTo(true)
         assertThat(purchases.appUserID).isEqualTo(randomID.captured)
         assertThat(randomID.captured).isNotNull()
     }
@@ -1204,23 +1142,6 @@ class PurchasesTest {
 
 
     @Test
-    fun `when the activity has not been paused, getcaches is not triggered onResume`() {
-        setup()
-        purchases.onActivityResumed(mockk())
-        verify {
-            listener.didReceiveUpdatedPurchaserInfo(any())
-        }
-    }
-
-    @Test
-    fun `when setting listener, activity callbacks are set`() {
-        setup()
-        verify {
-            mockApplication.registerActivityLifecycleCallbacks(purchases)
-        }
-    }
-
-    @Test
     fun `when setting listener, caches are retrieved`() {
         setup()
         verify {
@@ -1234,21 +1155,6 @@ class PurchasesTest {
         verify (exactly = 0) {
             mockBillingWrapper.queryPurchaseHistoryAsync(any(), any(), any())
         }
-    }
-
-    @Test
-    fun `when reset, posted tokens are cleared`() {
-        setup()
-        purchases.reset()
-        assertThat(purchases.postedTokens.size).isEqualTo(0)
-    }
-
-
-    @Test
-    fun `when identify, posted tokens are cleared`() {
-        setup()
-        purchases.identify("new")
-        assertThat(purchases.postedTokens.size).isEqualTo(0)
     }
 
     @Test
@@ -1316,16 +1222,6 @@ class PurchasesTest {
         }
     }
 
-    private fun mockApplication() {
-        every {
-            mockApplication.registerActivityLifecycleCallbacks(
-                capture(
-                    capturedActivityLifecycleCallbacks
-                )
-            )
-        } just Runs
-    }
-
     private fun mockCache(mockInfo: PurchaserInfo) {
         with(mockCache) {
             every {
@@ -1376,9 +1272,6 @@ class PurchasesTest {
         } just Runs
         every {
             mockBillingWrapper.setListener(null)
-        } just Runs
-        every {
-            mockApplication.unregisterActivityLifecycleCallbacks(purchases)
         } just Runs
     }
 }
