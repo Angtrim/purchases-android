@@ -62,7 +62,12 @@ class Purchases @JvmOverloads internal constructor(
 
     private var purchaseCallbacks: MutableMap<String, PurchaseCompletedListener> = mutableMapOf()
     private var lastSentPurchaserInfo: PurchaserInfo? = null
-    private var updatedPurchaserInfoListener: UpdatedPurchaserInfoListener? = null
+    var updatedPurchaserInfoListener: UpdatedPurchaserInfoListener? = null
+        set(value) {
+            field = value
+            afterSetListener(value)
+        }
+
     internal var cachedEntitlements: Map<String, Entitlement>? = null
         @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
         set(value) { field = value }
@@ -277,10 +282,6 @@ class Purchases @JvmOverloads internal constructor(
         }
     }
 
-    fun setUpdatedPurchaserInfoListener(listener: UpdatedPurchaserInfoListener?) {
-        this.updatedPurchaserInfoListener = listener
-    }
-
     fun removeUpdatedPurchaserInfoListener() {
         this.updatedPurchaserInfoListener = null
     }
@@ -454,6 +455,15 @@ class Purchases @JvmOverloads internal constructor(
                 }
             } else {
                 onCompleted(detailsByID)
+            }
+        }
+    }
+
+    private fun afterSetListener(listener: UpdatedPurchaserInfoListener?) {
+        if (listener != null) {
+            val cachedPurchaserInfo = deviceCache.getCachedPurchaserInfo(appUserID)
+            if (cachedPurchaserInfo != null) {
+                listener.onReceived(cachedPurchaserInfo)
             }
         }
     }

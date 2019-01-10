@@ -128,7 +128,7 @@ class BackendTest {
     @Throws(HTTPClient.HTTPErrorException::class, JSONException::class)
     private fun postReceipt(
         responseCode: Int,
-        isRestore: Boolean?,
+        isRestore: Boolean,
         clientException: HTTPClient.HTTPErrorException?,
         resultBody: String?
     ): PurchaserInfo {

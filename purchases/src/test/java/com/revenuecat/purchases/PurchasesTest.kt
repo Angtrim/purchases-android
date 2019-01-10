@@ -1,15 +1,16 @@
 package com.revenuecat.purchases
 
 import android.app.Activity
-import android.app.Application
 import android.support.test.runner.AndroidJUnit4
 
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.SkuDetails
+import com.revenuecat.purchases.interfaces.GetSkusResponseHandler
 import com.revenuecat.purchases.interfaces.PurchaseCompletedListener
 import com.revenuecat.purchases.interfaces.ReceiveEntitlementsListener
 import com.revenuecat.purchases.interfaces.ReceivePurchaserInfoListener
+import com.revenuecat.purchases.interfaces.UpdatedPurchaserInfoListener
 
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,7 +33,7 @@ class PurchasesTest {
     private val mockBillingWrapper: BillingWrapper = mockk()
     private val mockBackend: Backend = mockk()
     private val mockCache: DeviceCache = mockk()
-    private val listener: Purchases.PurchaserInfoListener = mockk()
+    private val listener: UpdatedPurchaserInfoListener = mockk()
 
     private var capturedPurchasesUpdatedListener = slot<BillingWrapper.PurchasesUpdatedListener>()
 
@@ -47,6 +48,9 @@ class PurchasesTest {
         mockCache(mockInfo)
         mockBackend(mockInfo)
         mockBillingWrapper()
+        every {
+            listener.onReceived(any())
+        } just Runs
 
         purchases = Purchases(
             appUserId,
@@ -597,70 +601,6 @@ class PurchasesTest {
     }
 
     @Test
-    fun doesntDoublePostReceipts() {
-        setup()
-
-        val sku = "onemonth_freetrial"
-        val purchaseToken = "crazy_purchase_token"
-
-        val p1: Purchase = mockk(relaxed = true)
-        every {
-            p1.sku
-        } returns sku
-        every {
-            p1.purchaseToken
-        } returns purchaseToken
-
-        val p2: Purchase = mockk(relaxed = true)
-        every {
-            p2.sku
-        } returns sku
-        every {
-            p2.purchaseToken
-        } returns purchaseToken
-
-        val p3: Purchase = mockk(relaxed = true)
-        every {
-            p3.sku
-        } returns sku
-        every {
-            p3.purchaseToken
-        } returns purchaseToken + "diff"
-
-        capturedPurchasesUpdatedListener.captured.onPurchasesUpdated(listOf(p1, p2, p3))
-
-        verify(exactly = 1) {
-            mockBackend.postReceiptData(
-                purchaseToken,
-                purchases.appUserID,
-                sku,
-                false,
-                any(),
-                any()
-            )
-        }
-        verify(exactly = 1) {
-            mockBackend.postReceiptData(
-                purchaseToken + "diff",
-                purchases.appUserID,
-                sku,
-                false,
-                any(),
-                any()
-            )
-        }
-    }
-
-    @Test
-    fun cachedUserInfoShouldGoToListener() {
-        setup()
-
-        verify {
-            listener.didReceiveUpdatedPurchaserInfo(any())
-        }
-    }
-
-    @Test
     fun receivedPurchaserInfoShouldBeCached() {
         setup()
 
@@ -792,9 +732,7 @@ class PurchasesTest {
     }
 
     @Test
-    fun getEntitlementsErrorIsCalledIfSkuDetailsMissing() {
-        // TODO: I think this test doesn't make sense
-        fail()
+    fun getEntitlementsErrorIsNotCalledIfSkuDetailsMissing() {
         setup()
 
         val skus = listOf("monthly")
@@ -1144,8 +1082,11 @@ class PurchasesTest {
     @Test
     fun `when setting listener, caches are retrieved`() {
         setup()
+
+        purchases.updatedPurchaserInfoListener = listener
+
         verify {
-            listener.didReceiveUpdatedPurchaserInfo(any())
+            listener.onReceived(any())
         }
     }
 
@@ -1167,7 +1108,6 @@ class PurchasesTest {
             purchases.close()
         }
     }
-
 
     private fun mockSkuDetailFetch(details: List<SkuDetails>, skus: List<String>, skuType: String) {
         every {
@@ -1238,6 +1178,9 @@ class PurchasesTest {
             } just Runs
             every {
                 cacheAppUserID(any())
+            } just Runs
+            every {
+                clearCachedPurchaserInfo(any())
             } just Runs
         }
     }

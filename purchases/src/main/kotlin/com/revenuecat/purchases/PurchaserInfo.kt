@@ -95,6 +95,22 @@ class PurchaserInfo private constructor(
         return date.after(requestDate?: Date())
     }
 
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as PurchaserInfo
+
+        if (allExpirationDatesByProduct != other.allExpirationDatesByProduct) return false
+        if (allPurchaseDatesByProduct != other.allPurchaseDatesByProduct) return false
+        if (allExpirationDatesByEntitlement != other.allExpirationDatesByEntitlement) return false
+        if (allPurchaseDatesByEntitlement != other.allPurchaseDatesByEntitlement) return false
+        if (purchasedNonSubscriptionSkus != other.purchasedNonSubscriptionSkus) return false
+        if (activeEntitlements != other.activeEntitlements) return false
+
+        return true
+    }
+
     internal object Factory {
 
         /**

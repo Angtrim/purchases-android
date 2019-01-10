@@ -106,7 +106,7 @@ internal class Backend(
         purchaseToken: String,
         appUserID: String,
         productID: String,
-        isRestore: Boolean?,
+        isRestore: Boolean,
         onSuccess: (PurchaserInfo) -> Unit,
         onError: (PurchasesError) -> Unit
     ) {
