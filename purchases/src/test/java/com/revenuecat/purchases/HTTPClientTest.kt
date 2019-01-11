@@ -1,3 +1,8 @@
+//  Purchases
+//
+//  Copyright © 2019 RevenueCat, Inc. All rights reserved.
+//
+
 package com.revenuecat.purchases
 
 import okhttp3.mockwebserver.MockResponse
