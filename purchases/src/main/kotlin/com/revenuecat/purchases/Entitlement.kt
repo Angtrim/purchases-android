@@ -18,7 +18,7 @@ import org.json.JSONObject
  * See [this link](https://docs.revenuecat.com/docs/entitlements) for more info
  * @property offerings Map of offering objects by name
  */
-data class Entitlement internal constructor(
+class Entitlement internal constructor(
     val offerings: Map<String, Offering>
 ) {
 
@@ -41,6 +41,13 @@ data class Entitlement internal constructor(
         }
 
     }
+
+    override fun toString(): String =
+        "<Entitlement offerings: {\n" +
+                offerings.map { (_, offering)->
+                    "\t $offering => {activeProduct: ${offering.activeProductIdentifier}, loaded: ${offering.skuDetails?.let { "YES" }?:"NO" }\n"
+                } +
+                "} >"
 
 }
 

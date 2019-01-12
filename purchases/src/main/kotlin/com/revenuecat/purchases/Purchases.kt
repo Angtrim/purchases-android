@@ -511,7 +511,6 @@ class Purchases @JvmOverloads internal constructor(
      * @suppress
      */
     override fun onPurchasesUpdated(purchases: List<@JvmSuppressWildcards Purchase>) {
-        // TODO: if there's no purchaseCallbacks call the delegate
         postPurchases(
             purchases,
             allowSharingPlayStoreAccount,
@@ -536,7 +535,6 @@ class Purchases @JvmOverloads internal constructor(
         @BillingClient.BillingResponse responseCode: Int,
         message: String
     ) {
-        // TODO: this will send error to all purchases on queue
         purchases?.mapNotNull { purchaseCallbacks.remove(it.sku) }?.forEach {
             it.onCompleted(
                 null,

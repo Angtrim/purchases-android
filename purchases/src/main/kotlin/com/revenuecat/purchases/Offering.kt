@@ -18,4 +18,9 @@ import com.android.billingclient.api.SkuDetails
 data class Offering @JvmOverloads internal constructor(
     val activeProductIdentifier: String,
     var skuDetails: SkuDetails? = null
-)
+) {
+
+    override fun toString() =
+        "<Offering activeProductIdentifier: $activeProductIdentifier, activeProduct: $activeProductIdentifier>"
+
+}

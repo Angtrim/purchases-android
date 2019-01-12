@@ -116,6 +116,18 @@ class PurchaserInfo private constructor(
         return true
     }
 
+    override fun toString() =
+        "<PurchaserInfo\n " +
+                "latestExpirationDate: $latestExpirationDate\n" +
+                "activeSubscriptions:  ${activeSubscriptions.map {
+                    it to mapOf("expiresDate" to getExpirationDateForSku(it))
+                }.toMap()},\n" +
+                "activeEntitlements: ${activeEntitlements.map {
+                    it to mapOf("expiresDate" to getExpirationDateForEntitlement(it))
+                }.toMap()},\n" +
+                "nonConsumablePurchases: $purchasedNonSubscriptionSkus,\n" +
+                "requestDate: $requestDate\n>"
+
     internal object Factory {
 
         /**
