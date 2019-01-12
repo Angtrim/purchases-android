@@ -6,8 +6,8 @@
 package com.revenuecat.purchases
 
 import android.net.Uri
-
 import org.json.JSONException
+
 import org.json.JSONObject
 
 import java.util.HashMap
@@ -37,11 +37,12 @@ internal class Backend(
                     try {
                         onSuccess(purchaserInfoFactory.build(result.body!!))
                     } catch (e: JSONException) {
+                        log("Error parsing JSON ${e.localizedMessage}")
                         onError(
                             PurchasesError(
                                 Purchases.ErrorDomains.REVENUECAT_BACKEND,
                                 result.responseCode,
-                                e.message
+                                e.localizedMessage
                             )
                         )
                     }
@@ -53,7 +54,7 @@ internal class Backend(
                             try {
                                 "Server error: ${result.body!!.getString("message")}"
                             } catch (jsonException: JSONException) {
-                                "Unexpected server error ${result.responseCode}"
+                                "Unexpected error from backend ${result.responseCode}"
                             }
                         )
                     )
@@ -268,17 +269,7 @@ internal class Backend(
 
             override fun onCompletion(result: HTTPClient.Result) {
                 if (result.responseCode < 300) {
-                    try {
-                        onSuccessHandler()
-                    } catch (e: JSONException) {
-                        onErrorHandler(
-                            PurchasesError(
-                                Purchases.ErrorDomains.REVENUECAT_BACKEND,
-                                result.responseCode,
-                                "Backend error"
-                            )
-                        )
-                    }
+                    onSuccessHandler()
                 } else {
                     onErrorHandler(
                         PurchasesError(

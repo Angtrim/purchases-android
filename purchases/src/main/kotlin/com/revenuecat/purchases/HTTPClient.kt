@@ -126,6 +126,7 @@ internal class HTTPClient(
 
         val payload: String
         try {
+            debugLog("${connection.requestMethod} $path")
             result.responseCode = connection.responseCode
             payload = readFully(inputStream)
         } catch (e: IOException) {
@@ -136,8 +137,11 @@ internal class HTTPClient(
 
         try {
             result.body = JSONObject(payload)
+            debugLog("${connection.requestMethod} $path ${result.responseCode}")
         } catch (e: JSONException) {
-            throw HTTPErrorException(result.responseCode, "Error parsing JSON body: $payload")
+            log("Error parsing JSON ${e.localizedMessage}")
+            log("Data received: $payload")
+            throw HTTPErrorException(result.responseCode, "Error parsing JSON body: ${e.localizedMessage}")
         }
 
         return result

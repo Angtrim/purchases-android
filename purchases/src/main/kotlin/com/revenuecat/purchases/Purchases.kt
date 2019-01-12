@@ -80,11 +80,15 @@ class Purchases @JvmOverloads internal constructor(
         get() = field
 
     init {
+        debugLog("Debug logging enabled.")
+        debugLog("SDK Version - $frameworkVersion")
+        debugLog("Initial App User ID - $_appUserID")
         if (_appUserID != null) {
             this.appUserID = _appUserID
             identify(this.appUserID)
         } else {
             this.appUserID = getAnonymousID().also {
+                debugLog("Generated New App User ID - $it")
                 allowSharingPlayStoreAccount = true
             }
             updateCaches()
@@ -130,12 +134,17 @@ class Purchases @JvmOverloads internal constructor(
      * @param [handler] Called when entitlements are available. Called immediately if entitlements are cached.
      */
     fun getEntitlements(handler: ReceiveEntitlementsListener? = null) {
-        this.cachedEntitlements?.let {
-            handler?.onReceived(it, null)
-            if (!isCacheStale()) {
+        if (this.cachedEntitlements != null) {
+            debugLog("Vending entitlements from cache")
+            handler?.onReceived(this.cachedEntitlements, null)
+            if (isCacheStale()) {
+                debugLog("Cache is stale, updating caches")
                 updateCaches()
             }
-        } ?: fetchAndCacheEntitlements(handler)
+        } else {
+            debugLog("No cached entitlements, fetching")
+            fetchAndCacheEntitlements(handler)
+        }
     }
 
     /**
@@ -171,6 +180,7 @@ class Purchases @JvmOverloads internal constructor(
         oldSkus: ArrayList<String> = ArrayList(),
         completion: PurchaseCompletedListener
     ) {
+        debugLog("makePurchase - $sku")
         if (purchaseCallbacks.containsKey(sku)) {
             completion.onCompleted(
                 null,
@@ -226,10 +236,12 @@ class Purchases @JvmOverloads internal constructor(
         newAppUserID: String,
         handler: ReceivePurchaserInfoListener? = null
     ) {
+        debugLog("Creating an alias to $appUserID from $newAppUserID")
         backend.createAlias(
             appUserID,
             newAppUserID,
             {
+                debugLog("Alias created")
                 identify(newAppUserID, handler)
             },
             { error ->
@@ -248,6 +260,7 @@ class Purchases @JvmOverloads internal constructor(
         appUserID: String,
         completion: ReceivePurchaserInfoListener? = null
     ) {
+        debugLog("Changing App User ID: ${this.appUserID} -> $appUserID")
         clearCaches()
         this.appUserID = appUserID
         purchaseCallbacks.clear()
@@ -278,11 +291,14 @@ class Purchases @JvmOverloads internal constructor(
     ) {
         val cachedPurchaserInfo = deviceCache.getCachedPurchaserInfo(appUserID)
         if (cachedPurchaserInfo != null) {
+            debugLog("Vending purchaserInfo from cache")
             completion.onReceived(cachedPurchaserInfo, null)
-            if (!isCacheStale()) {
+            if (isCacheStale()) {
+                debugLog("Cache is stale, updating caches")
                 updateCaches()
             }
         } else {
+            debugLog("No cached purchaser info, fetching")
             updateCaches(completion)
         }
     }
@@ -302,6 +318,7 @@ class Purchases @JvmOverloads internal constructor(
                 }
             },
             { error ->
+                log("Error fetching entitlements - $error")
                 handler?.onReceived(
                     null,
                     error
@@ -314,12 +331,17 @@ class Purchases @JvmOverloads internal constructor(
         entitlements: Map<String, Entitlement>,
         handler: ReceiveEntitlementsListener?
     ) {
+        val missingProducts = mutableListOf<String>()
         entitlements.values.flatMap { it.offerings.values }.forEach { o ->
             if (details.containsKey(o.activeProductIdentifier)) {
                 o.skuDetails = details[o.activeProductIdentifier]
             } else {
-                Log.e("Purchases", "Failed to find SKU for " + o.activeProductIdentifier)
+                missingProducts.add(o.activeProductIdentifier)
             }
+        }
+        if (missingProducts.isNotEmpty()) {
+            log("Could not find SkuDetails for ${missingProducts.joinToString(", ")}")
+            log("Ensure your products are correctly configured in Play Store Developer Console")
         }
         handler?.onReceived(entitlements, null)
     }
@@ -334,7 +356,6 @@ class Purchases @JvmOverloads internal constructor(
             skus
         ) { skuDetails ->
             handler.onReceiveSkus(skuDetails)
-
         }
     }
 
@@ -466,9 +487,13 @@ class Purchases @JvmOverloads internal constructor(
 
     private fun afterSetListener(listener: UpdatedPurchaserInfoListener?) {
         if (listener != null) {
+            debugLog("Listener set")
             val cachedPurchaserInfo = deviceCache.getCachedPurchaserInfo(appUserID)
             if (cachedPurchaserInfo != null) {
+                debugLog("Listener vending purchaserInfo from cache")
                 listener.onReceived(cachedPurchaserInfo)
+            } else {
+                debugLog("No cached purchaser info, listener will be called on next fetch")
             }
         }
     }
@@ -524,6 +549,8 @@ class Purchases @JvmOverloads internal constructor(
 
     // region Static
     companion object {
+        @JvmStatic
+        var debugLogsEnabled = shouldShowDebugLogs
 
         private var _sharedInstance: Purchases? = null
         /**
@@ -534,7 +561,7 @@ class Purchases @JvmOverloads internal constructor(
         var sharedInstance: Purchases
             get() =
                 _sharedInstance
-                    ?: throw UninitializedPropertyAccessException("Make sure you call Purchases.configure before")
+                    ?: throw UninitializedPropertyAccessException("There is no singleton instance. Make sure you configure Purchases before trying to get the default instance.")
             @VisibleForTesting(otherwise = VisibleForTesting.NONE)
             internal set(value) {
                 _sharedInstance?.close()

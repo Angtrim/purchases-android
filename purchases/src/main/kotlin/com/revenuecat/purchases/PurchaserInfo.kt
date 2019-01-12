@@ -198,7 +198,7 @@ class PurchaserInfo private constructor(
                                 Iso8601Utils.parse(it)
                             }
                     } catch (e: RuntimeException) {
-                        throw JSONException(e.message)
+                        throw JSONException(e.localizedMessage)
                     }
                 } else null
 
